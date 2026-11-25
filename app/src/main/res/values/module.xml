@@ -1,0 +1,4 @@
+<resources>
+    <string name="module_name">KeyFill</string>
+    <string name="module_description">在微信输入法和超级小爱输入法的键盘内显示 Android 自动填充建议</string>
+</resources>
