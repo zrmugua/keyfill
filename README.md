@@ -1,11 +1,12 @@
 <div align="center">
   <img src="docs/logo.svg" width="108" height="108" alt="KeyFill Logo" />
   <h1>KeyFill</h1>
-  <p><strong>为微信输入法与超级小爱输入法接入 Android 原生内联自动填充建议</strong></p>
+  <p><strong>为第三方 Android 输入法接入原生键盘内联自动填充建议</strong></p>
   <p>
     <a href="https://github.com/zrmugua/keyfill/actions/workflows/build.yml"><img src="https://github.com/zrmugua/keyfill/actions/workflows/build.yml/badge.svg" alt="Build" /></a>
     <img src="https://img.shields.io/badge/Android-16%2B%20(API%2036)-1B5EF2" alt="Android 16+" />
     <img src="https://img.shields.io/badge/Xposed-libxposed%20API%20102-3B82F6" alt="libxposed API 102" />
+    <a href="https://www.coolapk.com/u/9898174"><img src="https://img.shields.io/badge/Coolapk-%40%E6%9C%A8%E7%93%9C-11B981" alt="Coolapk" /></a>
     <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-64748B" alt="License" /></a>
   </p>
 </div>
@@ -14,9 +15,9 @@
 
 ## 简介
 
-默认情况下，Android 的键盘内联自动填充（Inline Autofill Suggestions）在许多国产输入法中未被启用或未接入渲染通道，导致 **1Password**、**Bitwarden**、**Google 密码管理工具** 等密码管理器只能退化为悬浮弹窗，甚至无法在键盘顶部直接点选填充。
+默认情况下，Android 的键盘内联自动填充（Inline Autofill Suggestions）在许多第三方输入法中未被启用或未接入渲染通道，导致 **1Password**、**Bitwarden**、**Google 密码管理工具** 等密码管理器只能退化为悬浮弹窗，无法在键盘顶部候选栏内直接点选填充。
 
-**KeyFill** 是一个基于现代 **libxposed API 102** 的 LSPosed 模块，在不破坏输入法原有视觉体验的前提下，让 **微信输入法** 与 **超级小爱输入法** 原生支持键盘顶部内联自动填充卡片。
+**KeyFill** 是一个基于现代 **libxposed API 102** 的 LSPosed 模块，采用可扩展的 `KeyboardTarget` 适配架构，在不破坏输入法原有视觉体验的前提下为第三方输入法补齐键盘内联自动填充能力（目前已适配**微信输入法**与**超级小爱输入法**，后续将持续扩展更多输入法）。
 
 ## 功能特性
 

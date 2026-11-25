@@ -1,5 +1,6 @@
 <resources>
     <string name="manager_home">首页</string>
+    <string name="manager_settings">设置</string>
     <string name="manager_about">关于</string>
     <string name="action_refresh">刷新状态</string>
 
@@ -14,10 +15,10 @@
     <string name="status_version_meta">版本 %1$s (%2$d)</string>
     <string name="status_setup_system_scope">请在 LSPosed 中勾选系统框架作用域</string>
     <string name="status_setup_keyboard_scope">请勾选 %1$s 的 LSPosed 作用域</string>
-    <string name="status_setup_all">请选择密码管理器并切换到适配输入法</string>
+    <string name="status_setup_all">请选择密码管理器并切换到已适配输入法</string>
     <string name="status_setup_provider">请在系统设置中选择密码管理器</string>
-    <string name="status_setup_ime">请切换到微信输入法或超级小爱输入法</string>
-    <string name="status_reload_summary">模块版本已更新，请重启输入法或设备生效</string>
+    <string name="status_setup_ime">请切换到已适配的输入法</string>
+    <string name="status_reload_summary">模块版本已更新，点击下方输入法结束运行或重启生效</string>
 
     <string name="section_environment">运行环境</string>
     <string name="status_framework">Xposed 框架</string>
@@ -32,7 +33,7 @@
     <string name="status_ime">默认输入法</string>
     <string name="status_not_configured">未设置，点此前往系统设置</string>
 
-    <string name="ime_supported">适配输入法</string>
+    <string name="ime_supported">已适配输入法</string>
     <string name="ime_wechat">微信输入法</string>
     <string name="ime_xiaoai">超级小爱输入法</string>
     <string name="ime_generic">系统输入法</string>
@@ -41,18 +42,37 @@
     <string name="ime_not_installed">未安装</string>
     <string name="ime_scoped">已勾选作用域</string>
     <string name="ime_unscoped">未勾选作用域，点此申请</string>
+    <string name="ime_app_info_hint">点此管理进程</string>
     <string name="ime_status_join">%1$s · %2$s</string>
     <string name="autofill_generic">系统自动填充服务</string>
 
     <string name="section_processes">已注入进程</string>
     <string name="process_system">系统框架 (system_server)</string>
-    <string name="process_wechat">微信输入法 (%1$s)</string>
-    <string name="process_xiaoai">超级小爱输入法 (%1$s)</string>
+    <string name="process_keyboard">%1$s (%2$s)</string>
     <string name="process_summary">PID %1$d · 版本 %2$d · %3$s</string>
     <string name="process_state_up_to_date">已最新</string>
     <string name="process_state_stale">需重载</string>
     <string name="process_state_reloading">重载中</string>
     <string name="process_state_failed">加载失败</string>
+
+    <string name="section_appearance">显示与外观</string>
+    <string name="pref_theme_mode">深浅色模式</string>
+    <string name="pref_theme_system">跟随系统</string>
+    <string name="pref_theme_light">浅色模式</string>
+    <string name="pref_theme_dark">深色模式</string>
+    <string name="pref_monet">莫奈动态取色</string>
+    <string name="pref_monet_summary">跟随系统壁纸生成主题强调色</string>
+
+    <string name="section_tools">实用工具</string>
+    <string name="pref_hide_icon">隐藏桌面图标</string>
+    <string name="pref_hide_icon_summary">隐藏后仍可从 LSPosed 管理器模块设置进入</string>
+    <string name="tool_autofill_test">内联填充测试</string>
+    <string name="tool_autofill_test_summary">打开模拟登录输入框，直接验证键盘顶部填充条</string>
+    <string name="test_dialog_title">内联自动填充测试</string>
+    <string name="test_dialog_summary">点击下方输入框唤起键盘，检查密码管理器建议条是否正常显示。</string>
+    <string name="test_hint_username">测试账号 / 邮箱</string>
+    <string name="test_hint_password">测试密码</string>
+    <string name="action_close">关闭</string>
 
     <string name="snackbar_refreshed">状态已刷新</string>
     <string name="snackbar_package_copied">已复制模块包名</string>
@@ -60,27 +80,28 @@
     <string name="snackbar_scope_failed">作用域申请未通过：%1$s</string>
     <string name="snackbar_scope_all_ready">所需作用域均已勾选</string>
     <string name="snackbar_open_failed">无法打开目标页面</string>
+    <string name="snackbar_icon_hidden">已隐藏桌面图标，可从 LSPosed 模块设置打开</string>
+    <string name="snackbar_icon_shown">已恢复桌面图标</string>
 
     <string name="about_version">版本 %1$s (%2$d)</string>
-    <string name="about_autofill_description">为微信输入法和超级小爱输入法接入 Android 原生内联自动填充建议。</string>
-    <string name="about_details">模块信息</string>
-    <string name="about_author">作者</string>
-    <string name="about_author_value">木瓜 (Mugua)</string>
-    <string name="about_github">项目仓库</string>
+    <string name="about_autofill_description">为第三方输入法接入 Android 原生键盘内联自动填充建议。</string>
+    <string name="section_links">开发者与主页</string>
+    <string name="about_coolapk">酷安主页</string>
+    <string name="about_coolapk_value">木瓜 (@9898174)</string>
+    <string name="about_github">GitHub 仓库</string>
     <string name="about_github_value">github.com/zrmugua/keyfill</string>
-    <string name="about_license">开源许可</string>
-    <string name="about_license_value">Apache License 2.0</string>
+    <string name="about_details">模块信息</string>
     <string name="about_xposed_api">框架接口</string>
     <string name="about_xposed_api_default">libxposed API 102</string>
     <string name="about_package">模块包名</string>
     <string name="about_copy_package">复制模块包名</string>
+    <string name="about_targets">已适配输入法</string>
+    <string name="about_providers">支持服务</string>
+    <string name="about_providers_summary">1Password · Bitwarden 等遵循系统内联规范的密码管理器</string>
     <string name="about_requirement">运行要求</string>
     <string name="about_requirement_summary">Android 16+ · 系统框架与目标输入法作用域</string>
-    <string name="about_support">适配说明</string>
-    <string name="about_targets">适配输入法</string>
-    <string name="about_targets_summary">微信输入法 · 超级小爱输入法</string>
-    <string name="about_providers">密码管理器</string>
-    <string name="about_providers_summary">1Password · Bitwarden 等系统内联自动填充服务</string>
+    <string name="about_license">开源许可</string>
+    <string name="about_license_value">Apache License 2.0</string>
     <string name="about_credits">开源致谢</string>
     <string name="about_credit_lsposed">LSPosed / libxposed</string>
     <string name="about_credit_lsposed_summary">现代 Xposed 模块框架与服务接口</string>

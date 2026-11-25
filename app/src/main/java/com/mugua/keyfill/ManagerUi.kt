@@ -1,8 +1,16 @@
 package com.mugua.keyfill
 
+import android.app.Activity
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.pm.PackageManager
+import android.graphics.drawable.GradientDrawable
+import android.text.InputType
+import android.util.TypedValue
+import android.view.View
+import android.view.ViewGroup
+import android.widget.EditText
+import android.widget.LinearLayout
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
@@ -13,12 +21,14 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
@@ -28,11 +38,17 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerDefaults
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -40,10 +56,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
@@ -51,10 +69,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.graphics.drawable.toBitmap
+import androidx.core.view.WindowCompat
 import io.github.libxposed.service.HookedTarget
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.BasicComponent
+import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.Icon
@@ -64,17 +85,21 @@ import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.SnackbarHost
 import top.yukonga.miuix.kmp.basic.SnackbarHostState
+import top.yukonga.miuix.kmp.basic.Switch
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.basic.rememberTopAppBarState
+import top.yukonga.miuix.kmp.blur.Backdrop
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
+import top.yukonga.miuix.kmp.glass.GlassDropdownPreference
 import top.yukonga.miuix.kmp.glass.GlassNavigationBar
 import top.yukonga.miuix.kmp.glass.GlassNavigationItem
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.basic.ArrowRight
 import top.yukonga.miuix.kmp.icon.extended.Contacts
 import top.yukonga.miuix.kmp.icon.extended.Copy
+import top.yukonga.miuix.kmp.icon.extended.Hide
 import top.yukonga.miuix.kmp.icon.extended.Home
 import top.yukonga.miuix.kmp.icon.extended.Info
 import top.yukonga.miuix.kmp.icon.extended.Layers
@@ -84,15 +109,26 @@ import top.yukonga.miuix.kmp.icon.extended.Notes
 import top.yukonga.miuix.kmp.icon.extended.Refresh
 import top.yukonga.miuix.kmp.icon.extended.Settings
 import top.yukonga.miuix.kmp.icon.extended.Tasks
+import top.yukonga.miuix.kmp.icon.extended.Theme
+import top.yukonga.miuix.kmp.icon.extended.Tune
 import top.yukonga.miuix.kmp.material.GlassEdgeStrokes
+import top.yukonga.miuix.kmp.overlay.OverlayDialog
+import top.yukonga.miuix.kmp.theme.ColorSchemeMode
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.theme.ThemeController
 import top.yukonga.miuix.kmp.theme.darkColorScheme
 import top.yukonga.miuix.kmp.theme.lightColorScheme
+import top.yukonga.miuix.kmp.utils.PagerNavigationSpringSpec
 import top.yukonga.miuix.kmp.utils.overScrollVertical
+import top.yukonga.miuix.kmp.utils.scrollEndHaptic
+import top.yukonga.miuix.kmp.utils.springAnimateToPage
 
 private val CardMargin = PaddingValues(0.dp)
 private val RowMargin = PaddingValues(horizontal = 16.dp, vertical = 15.dp)
 private val SectionTitleMargin = PaddingValues(horizontal = 16.dp, vertical = 10.dp)
+
+private const val COOLAPK_URL = "https://www.coolapk.com/u/9898174"
+private const val GITHUB_URL = "https://github.com/zrmugua/keyfill"
 
 private enum class HealthState {
     WORKING,
@@ -106,31 +142,65 @@ internal fun ManagerApp(
     status: DeviceStatus,
     xposed: XposedStatus,
     metadata: AppMetadata,
+    preferences: UiPreferences,
     actions: ManagerActions,
 ) {
-    val dark = isSystemInDarkTheme()
-    val accent = if (dark) Color(0xFF6DA8FF) else Color(0xFF1B5EF2)
-    val colors = if (dark) darkColorScheme(primary = accent) else lightColorScheme(primary = accent)
+    val systemDark = isSystemInDarkTheme()
+    val dark = when (preferences.themeMode) {
+        1 -> false
+        2 -> true
+        else -> systemDark
+    }
+    val view = LocalView.current
+    if (!view.isInEditMode) {
+        SideEffect {
+            val window = (view.context as? Activity)?.window ?: return@SideEffect
+            val controller = WindowCompat.getInsetsController(window, view)
+            controller.isAppearanceLightStatusBars = !dark
+            controller.isAppearanceLightNavigationBars = !dark
+        }
+    }
 
-    MiuixTheme(colors = colors) {
-        val pagerState = rememberPagerState(initialPage = 0, pageCount = { 2 })
+    val schemeMode = when {
+        preferences.monetEnabled && preferences.themeMode == 1 -> ColorSchemeMode.MonetLight
+        preferences.monetEnabled && preferences.themeMode == 2 -> ColorSchemeMode.MonetDark
+        preferences.monetEnabled -> ColorSchemeMode.MonetSystem
+        preferences.themeMode == 1 -> ColorSchemeMode.Light
+        preferences.themeMode == 2 -> ColorSchemeMode.Dark
+        else -> ColorSchemeMode.System
+    }
+    val themeController = remember(schemeMode, systemDark) {
+        ThemeController(
+            colorSchemeMode = schemeMode,
+            lightColors = lightColorScheme(primary = Color(0xFF1B5EF2)),
+            darkColors = darkColorScheme(primary = Color(0xFF6DA8FF)),
+            isDark = dark,
+        )
+    }
+
+    MiuixTheme(controller = themeController) {
+        val colors = MiuixTheme.colorScheme
+        val pagerState = rememberPagerState(initialPage = 0, pageCount = { 3 })
         val scope = rememberCoroutineScope()
         val snackbarHostState = remember { SnackbarHostState() }
+        var showTestDialog by rememberSaveable { mutableStateOf(false) }
         val activeTab = pagerState.targetPage
 
         BackHandler(enabled = activeTab != 0) {
-            scope.launch { pagerState.animateScrollToPage(0) }
+            scope.launch { pagerState.springAnimateToPage(0) }
         }
 
         val pageState = rememberSaveableStateHolder()
         val backdrop = rememberLayerBackdrop()
         val homeLabel = stringResource(R.string.manager_home)
+        val settingsLabel = stringResource(R.string.manager_settings)
         val aboutLabel = stringResource(R.string.manager_about)
         val refreshLabel = stringResource(R.string.action_refresh)
         val refreshedMessage = stringResource(R.string.snackbar_refreshed)
-        val tabs = remember(homeLabel, aboutLabel) {
+        val tabs = remember(homeLabel, settingsLabel, aboutLabel) {
             listOf(
                 GlassNavigationItem(icon = MiuixIcons.Home, label = homeLabel),
+                GlassNavigationItem(icon = MiuixIcons.Tune, label = settingsLabel),
                 GlassNavigationItem(icon = MiuixIcons.Info, label = aboutLabel),
             )
         }
@@ -157,19 +227,19 @@ internal fun ManagerApp(
                         selectedIndex = activeTab,
                         onSelect = { target ->
                             if (target != pagerState.targetPage) {
-                                scope.launch { pagerState.animateScrollToPage(target) }
+                                scope.launch { pagerState.springAnimateToPage(target) }
                             }
                         },
                         backdrop = backdrop,
                         defaultWindowInsetsPadding = false,
-                        selectedColor = accent,
+                        selectedColor = colors.primary,
                         height = 60.dp,
                         stroke = GlassEdgeStrokes.forTheme(
                             dark,
                             GlassEdgeStrokes.SmallLight,
                             GlassEdgeStrokes.SmallDark,
                         ),
-                        modifier = Modifier.widthIn(max = 224.dp).fillMaxWidth(),
+                        modifier = Modifier.widthIn(max = 304.dp).fillMaxWidth(),
                     )
                 }
             },
@@ -185,10 +255,18 @@ internal fun ManagerApp(
                     state = pagerState,
                     modifier = Modifier.fillMaxSize(),
                     beyondViewportPageCount = 1,
+                    flingBehavior = PagerDefaults.flingBehavior(
+                        state = pagerState,
+                        snapAnimationSpec = PagerNavigationSpringSpec,
+                    ),
                 ) { pageIndex ->
                     pageState.SaveableStateProvider(pageIndex) {
                         val scrollBehavior = MiuixScrollBehavior(rememberTopAppBarState())
-                        val pageTitle = if (pageIndex == 0) stringResource(R.string.module_name) else aboutLabel
+                        val pageTitle = when (pageIndex) {
+                            0 -> stringResource(R.string.module_name)
+                            1 -> settingsLabel
+                            else -> aboutLabel
+                        }
                         Scaffold(
                             modifier = Modifier.fillMaxSize(),
                             containerColor = Color.Transparent,
@@ -226,52 +304,74 @@ internal fun ManagerApp(
                             LazyColumn(
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .nestedScroll(scrollBehavior.nestedScrollConnection)
-                                    .overScrollVertical(),
+                                    .scrollEndHaptic()
+                                    .overScrollVertical()
+                                    .nestedScroll(scrollBehavior.nestedScrollConnection),
                                 contentPadding = contentPadding,
                                 verticalArrangement = Arrangement.spacedBy(12.dp),
                             ) {
-                                if (pageIndex == 0) {
-                                    item {
-                                        StatusHeroCard(
-                                            status = status,
-                                            xposed = xposed,
-                                            metadata = metadata,
-                                            dark = dark,
-                                            actions = actions,
-                                            showMessage = showMessage,
-                                        )
-                                    }
-                                    item {
-                                        EnvironmentSection(
-                                            status = status,
-                                            xposed = xposed,
-                                            actions = actions,
-                                            showMessage = showMessage,
-                                        )
-                                    }
-                                    item {
-                                        SupportedKeyboardsSection(
-                                            status = status,
-                                            xposed = xposed,
-                                            actions = actions,
-                                            showMessage = showMessage,
-                                        )
-                                    }
-                                    if (xposed.runningTargets.isNotEmpty()) {
+                                when (pageIndex) {
+                                    0 -> {
                                         item {
-                                            HookedProcessesSection(targets = xposed.runningTargets)
+                                            StatusHeroCard(
+                                                status = status,
+                                                xposed = xposed,
+                                                metadata = metadata,
+                                                dark = dark,
+                                                actions = actions,
+                                                showMessage = showMessage,
+                                            )
+                                        }
+                                        item {
+                                            EnvironmentSection(
+                                                status = status,
+                                                xposed = xposed,
+                                                actions = actions,
+                                                showMessage = showMessage,
+                                            )
+                                        }
+                                        item {
+                                            SupportedKeyboardsSection(
+                                                status = status,
+                                                xposed = xposed,
+                                                actions = actions,
+                                                onOpenTest = { showTestDialog = true },
+                                                showMessage = showMessage,
+                                            )
+                                        }
+                                        if (xposed.runningTargets.isNotEmpty()) {
+                                            item {
+                                                HookedProcessesSection(
+                                                    status = status,
+                                                    targets = xposed.runningTargets,
+                                                    actions = actions,
+                                                    showMessage = showMessage,
+                                                )
+                                            }
                                         }
                                     }
-                                } else {
-                                    item { AboutHeroCard(metadata = metadata, dark = dark) }
-                                    item {
-                                        AboutDetailsSection(
-                                            metadata = metadata,
-                                            xposed = xposed,
-                                            actions = actions,
-                                            showMessage = showMessage,
-                                        )
+                                    1 -> {
+                                        item {
+                                            SettingsSection(
+                                                preferences = preferences,
+                                                backdrop = backdrop,
+                                                actions = actions,
+                                                onOpenTest = { showTestDialog = true },
+                                                showMessage = showMessage,
+                                            )
+                                        }
+                                    }
+                                    else -> {
+                                        item { AboutHeroCard(metadata = metadata, dark = dark) }
+                                        item {
+                                            AboutDetailsSection(
+                                                status = status,
+                                                metadata = metadata,
+                                                xposed = xposed,
+                                                actions = actions,
+                                                showMessage = showMessage,
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -279,6 +379,12 @@ internal fun ManagerApp(
                     }
                 }
             }
+
+            AutofillTestDialog(
+                show = showTestDialog,
+                dark = dark,
+                onDismiss = { showTestDialog = false },
+            )
         }
     }
 }
@@ -353,13 +459,14 @@ private fun StatusHeroCard(
         stringResource(R.string.status_version_meta, metadata.versionName, metadata.versionCode)
     }
 
+    val primary = MiuixTheme.colorScheme.primary
     val container = when (health) {
-        HealthState.WORKING -> if (dark) Color(0xFF162844) else Color(0xFFE6EFFD)
+        HealthState.WORKING -> primary.copy(alpha = if (dark) 0.22f else 0.13f)
         HealthState.INACTIVE -> if (dark) Color(0xFF352222) else Color(0xFFFCE8E6)
         HealthState.SETUP_NEEDED, HealthState.RELOAD_NEEDED -> if (dark) Color(0xFF362B1B) else Color(0xFFFFEFD7)
     }
     val markColor = when (health) {
-        HealthState.WORKING -> MiuixTheme.colorScheme.primary
+        HealthState.WORKING -> primary
         HealthState.INACTIVE -> if (dark) Color(0xFFF09893) else Color(0xFF9C2B27)
         HealthState.SETUP_NEEDED, HealthState.RELOAD_NEEDED -> if (dark) Color(0xFFF1BE78) else Color(0xFF855210)
     }
@@ -381,9 +488,12 @@ private fun StatusHeroCard(
                 .heightIn(min = 128.dp)
                 .clickable {
                     when {
-                        !xposed.active || health == HealthState.WORKING || health == HealthState.RELOAD_NEEDED -> {
+                        !xposed.active || health == HealthState.WORKING -> {
                             actions.refresh()
                             showMessage(refreshedMsg)
+                        }
+                        health == HealthState.RELOAD_NEEDED && keyboard != null -> {
+                            if (!actions.openAppDetails(keyboard.packageName)) showMessage(openFailedMsg)
                         }
                         !xposed.hasSystemScope || currentKeyboardUnscoped -> {
                             actions.requestScope(missingScopes) { ok, reason ->
@@ -563,6 +673,7 @@ private fun SupportedKeyboardsSection(
     status: DeviceStatus,
     xposed: XposedStatus,
     actions: ManagerActions,
+    onOpenTest: () -> Unit,
     showMessage: (String) -> Unit,
 ) {
     val keyboardIcon = ImageVector.vectorResource(R.drawable.ic_keyboard)
@@ -584,11 +695,15 @@ private fun SupportedKeyboardsSection(
                     },
                 )
                 val scoped = xposed.isScoped(pkg)
-                val summary = if (xposed.active && keyboard.installed) {
-                    val scopeText = stringResource(if (scoped) R.string.ime_scoped else R.string.ime_unscoped)
-                    stringResource(R.string.ime_status_join, installText, scopeText)
-                } else {
-                    installText
+                val summary = when {
+                    xposed.active && keyboard.installed -> {
+                        val scopeText = stringResource(if (scoped) R.string.ime_scoped else R.string.ime_unscoped)
+                        stringResource(R.string.ime_status_join, installText, scopeText)
+                    }
+                    keyboard.installed && isCurrent -> {
+                        stringResource(R.string.ime_status_join, installText, stringResource(R.string.ime_app_info_hint))
+                    }
+                    else -> installText
                 }
                 val needsScope = xposed.active && keyboard.installed && !scoped
                 ManagerRow(
@@ -596,7 +711,7 @@ private fun SupportedKeyboardsSection(
                     summary = summary,
                     icon = keyboardIcon,
                     packageName = pkg,
-                    showChevron = needsScope || (keyboard.installed && !isCurrent),
+                    showChevron = keyboard.installed,
                     onClick = when {
                         needsScope -> {
                             {
@@ -614,7 +729,7 @@ private fun SupportedKeyboardsSection(
                         }
                         keyboard.installed -> {
                             {
-                                if (!actions.openInputMethodSettings()) showMessage(openFailedMsg)
+                                if (!actions.openAppDetails(pkg)) showMessage(openFailedMsg)
                             }
                         }
                         else -> null
@@ -622,23 +737,42 @@ private fun SupportedKeyboardsSection(
                 )
             }
         }
+
+        SmallTitle(text = stringResource(R.string.section_tools), insideMargin = SectionTitleMargin)
+        Card(modifier = Modifier.fillMaxWidth(), insideMargin = CardMargin) {
+            ManagerRow(
+                title = stringResource(R.string.tool_autofill_test),
+                summary = stringResource(R.string.tool_autofill_test_summary),
+                icon = MiuixIcons.Lock,
+                showChevron = true,
+                onClick = onOpenTest,
+            )
+        }
     }
 }
 
 @Composable
-private fun HookedProcessesSection(targets: List<HookedProcessInfo>) {
+private fun HookedProcessesSection(
+    status: DeviceStatus,
+    targets: List<HookedProcessInfo>,
+    actions: ManagerActions,
+    showMessage: (String) -> Unit,
+) {
     val keyboardIcon = ImageVector.vectorResource(R.drawable.ic_keyboard)
+    val openFailedMsg = stringResource(R.string.snackbar_open_failed)
+
     Column {
         SmallTitle(text = stringResource(R.string.section_processes), insideMargin = SectionTitleMargin)
         Card(modifier = Modifier.fillMaxWidth(), insideMargin = CardMargin) {
             targets.forEach { target ->
+                val matchedKeyboard = status.keyboards.firstOrNull {
+                    target.processName == it.app.packageName || target.processName.startsWith("${it.app.packageName}:")
+                }
                 val title = when {
                     target.processName == "system" || target.processName == "system_server" || target.processName == "android" ->
                         stringResource(R.string.process_system)
-                    target.processName.startsWith(KeyboardTarget.WETYPE.packageName) ->
-                        stringResource(R.string.process_wechat, target.processName)
-                    target.processName.startsWith(KeyboardTarget.XIAO_AI.packageName) ->
-                        stringResource(R.string.process_xiaoai, target.processName)
+                    matchedKeyboard != null ->
+                        stringResource(R.string.process_keyboard, matchedKeyboard.app.label, target.processName)
                     else -> target.processName
                 }
                 val stateLabel = stringResource(
@@ -649,16 +783,171 @@ private fun HookedProcessesSection(targets: List<HookedProcessInfo>) {
                         HookedTarget.State.FAILED -> R.string.process_state_failed
                     },
                 )
-                val pkg = when {
-                    target.processName.startsWith(KeyboardTarget.WETYPE.packageName) -> KeyboardTarget.WETYPE.packageName
-                    target.processName.startsWith(KeyboardTarget.XIAO_AI.packageName) -> KeyboardTarget.XIAO_AI.packageName
-                    else -> null
-                }
+                val pkg = matchedKeyboard?.app?.packageName
                 ManagerRow(
                     title = title,
                     summary = stringResource(R.string.process_summary, target.pid, target.loadedVersionCode, stateLabel),
                     icon = if (pkg != null) keyboardIcon else MiuixIcons.Tasks,
                     packageName = pkg,
+                    showChevron = pkg != null,
+                    onClick = if (pkg != null) {
+                        {
+                            if (!actions.openAppDetails(pkg)) showMessage(openFailedMsg)
+                        }
+                    } else {
+                        null
+                    },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SettingsSection(
+    preferences: UiPreferences,
+    backdrop: Backdrop,
+    actions: ManagerActions,
+    onOpenTest: () -> Unit,
+    showMessage: (String) -> Unit,
+) {
+    val modeOptions = listOf(
+        stringResource(R.string.pref_theme_system),
+        stringResource(R.string.pref_theme_light),
+        stringResource(R.string.pref_theme_dark),
+    )
+    val iconHiddenMsg = stringResource(R.string.snackbar_icon_hidden)
+    val iconShownMsg = stringResource(R.string.snackbar_icon_shown)
+
+    Column {
+        SmallTitle(text = stringResource(R.string.section_appearance), insideMargin = SectionTitleMargin)
+        Card(modifier = Modifier.fillMaxWidth(), insideMargin = CardMargin) {
+            GlassDropdownPreference(
+                title = stringResource(R.string.pref_theme_mode),
+                items = modeOptions,
+                selectedIndex = preferences.themeMode,
+                onSelectedIndexChange = { actions.updateThemeMode(it) },
+                backdrop = backdrop,
+                insideMargin = RowMargin,
+                startAction = { PackageIcon(null, MiuixIcons.Theme) },
+            )
+            SwitchRow(
+                title = stringResource(R.string.pref_monet),
+                summary = stringResource(R.string.pref_monet_summary),
+                icon = MiuixIcons.Tune,
+                checked = preferences.monetEnabled,
+                onCheckedChange = { actions.updateMonet(it) },
+            )
+        }
+
+        SmallTitle(text = stringResource(R.string.section_tools), insideMargin = SectionTitleMargin)
+        Card(modifier = Modifier.fillMaxWidth(), insideMargin = CardMargin) {
+            SwitchRow(
+                title = stringResource(R.string.pref_hide_icon),
+                summary = stringResource(R.string.pref_hide_icon_summary),
+                icon = MiuixIcons.Hide,
+                checked = preferences.launcherIconHidden,
+                onCheckedChange = { hidden ->
+                    actions.updateLauncherIconHidden(hidden)
+                    showMessage(if (hidden) iconHiddenMsg else iconShownMsg)
+                },
+            )
+            ManagerRow(
+                title = stringResource(R.string.tool_autofill_test),
+                summary = stringResource(R.string.tool_autofill_test_summary),
+                icon = MiuixIcons.Lock,
+                showChevron = true,
+                onClick = onOpenTest,
+            )
+        }
+    }
+}
+
+@Composable
+private fun AutofillTestDialog(
+    show: Boolean,
+    dark: Boolean,
+    onDismiss: () -> Unit,
+) {
+    val usernameHint = stringResource(R.string.test_hint_username)
+    val passwordHint = stringResource(R.string.test_hint_password)
+    val textColor = MiuixTheme.colorScheme.onSurface.toArgb()
+    val hintColor = MiuixTheme.colorScheme.onSurfaceVariantSummary.toArgb()
+    val fieldBg = (if (dark) Color(0xFF232C3B) else Color(0xFFF0F4FA)).toArgb()
+
+    OverlayDialog(
+        show = show,
+        title = stringResource(R.string.test_dialog_title),
+        summary = stringResource(R.string.test_dialog_summary),
+        onDismissRequest = onDismiss,
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            AndroidView(
+                modifier = Modifier.fillMaxWidth(),
+                factory = { ctx ->
+                    val density = ctx.resources.displayMetrics.density
+                    fun dpPx(v: Int): Int = (v * density).toInt()
+                    fun buildInput(hintText: String, autofillHint: String, inputType: Int): EditText {
+                        return EditText(ctx).apply {
+                            hint = hintText
+                            this.inputType = inputType
+                            isSingleLine = true
+                            setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+                            setPadding(dpPx(14), dpPx(13), dpPx(14), dpPx(13))
+                            importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_YES
+                            setAutofillHints(autofillHint)
+                        }
+                    }
+                    LinearLayout(ctx).apply {
+                        orientation = LinearLayout.VERTICAL
+                        importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_YES
+                        val userField = buildInput(
+                            usernameHint,
+                            View.AUTOFILL_HINT_USERNAME,
+                            InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS,
+                        )
+                        val passField = buildInput(
+                            passwordHint,
+                            View.AUTOFILL_HINT_PASSWORD,
+                            InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD,
+                        )
+                        addView(
+                            userField,
+                            LinearLayout.LayoutParams(
+                                ViewGroup.LayoutParams.MATCH_PARENT,
+                                ViewGroup.LayoutParams.WRAP_CONTENT,
+                            ).apply { bottomMargin = dpPx(10) },
+                        )
+                        addView(
+                            passField,
+                            LinearLayout.LayoutParams(
+                                ViewGroup.LayoutParams.MATCH_PARENT,
+                                ViewGroup.LayoutParams.WRAP_CONTENT,
+                            ),
+                        )
+                    }
+                },
+                update = { container ->
+                    val density = container.resources.displayMetrics.density
+                    for (i in 0 until container.childCount) {
+                        val child = container.getChildAt(i) as? EditText ?: continue
+                        child.setTextColor(textColor)
+                        child.setHintTextColor(hintColor)
+                        child.background = GradientDrawable().apply {
+                            cornerRadius = 14f * density
+                            setColor(fieldBg)
+                        }
+                    }
+                },
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Button(
+                onClick = onDismiss,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    text = stringResource(R.string.action_close),
+                    style = MiuixTheme.textStyles.body1.copy(fontWeight = FontWeight.Medium),
                 )
             }
         }
@@ -669,7 +958,7 @@ private fun HookedProcessesSection(targets: List<HookedProcessInfo>) {
 private fun AboutHeroCard(metadata: AppMetadata, dark: Boolean) {
     val accent = MiuixTheme.colorScheme.primary
     val colors = MiuixTheme.colorScheme
-    val heroColor = if (dark) Color(0xFF162234) else Color(0xFFEAF1FB)
+    val heroColor = accent.copy(alpha = if (dark) 0.16f else 0.10f)
     val markRes = if (dark) R.drawable.ic_about_mark_dark else R.drawable.ic_launcher_foreground
 
     Card(
@@ -722,6 +1011,7 @@ private fun AboutHeroCard(metadata: AppMetadata, dark: Boolean) {
 
 @Composable
 private fun AboutDetailsSection(
+    status: DeviceStatus,
     metadata: AppMetadata,
     xposed: XposedStatus,
     actions: ManagerActions,
@@ -737,14 +1027,23 @@ private fun AboutDetailsSection(
     } else {
         stringResource(R.string.about_xposed_api_default)
     }
+    val supportedSummary = remember(status.keyboards) {
+        status.keyboards.joinToString(" · ") { it.app.label }
+    }
 
     Column {
-        SmallTitle(text = stringResource(R.string.about_details), insideMargin = SectionTitleMargin)
+        SmallTitle(text = stringResource(R.string.section_links), insideMargin = SectionTitleMargin)
         Card(modifier = Modifier.fillMaxWidth(), insideMargin = CardMargin) {
             ManagerRow(
-                title = stringResource(R.string.about_author),
-                summary = stringResource(R.string.about_author_value),
+                title = stringResource(R.string.about_coolapk),
+                summary = stringResource(R.string.about_coolapk_value),
                 icon = MiuixIcons.Contacts,
+                showChevron = true,
+                onClick = {
+                    if (!actions.openUrl(COOLAPK_URL)) {
+                        showMessage(openFailedMsg)
+                    }
+                },
             )
             ManagerRow(
                 title = stringResource(R.string.about_github),
@@ -752,11 +1051,15 @@ private fun AboutDetailsSection(
                 icon = MiuixIcons.Link,
                 showChevron = true,
                 onClick = {
-                    if (!actions.openUrl("https://github.com/zrmugua/keyfill")) {
+                    if (!actions.openUrl(GITHUB_URL)) {
                         showMessage(openFailedMsg)
                     }
                 },
             )
+        }
+
+        SmallTitle(text = stringResource(R.string.about_details), insideMargin = SectionTitleMargin)
+        Card(modifier = Modifier.fillMaxWidth(), insideMargin = CardMargin) {
             ManagerRow(
                 title = stringResource(R.string.about_xposed_api),
                 summary = apiSummary,
@@ -783,6 +1086,16 @@ private fun AboutDetailsSection(
                 },
             )
             ManagerRow(
+                title = stringResource(R.string.about_targets),
+                summary = supportedSummary,
+                icon = ImageVector.vectorResource(R.drawable.ic_keyboard),
+            )
+            ManagerRow(
+                title = stringResource(R.string.about_providers),
+                summary = stringResource(R.string.about_providers_summary),
+                icon = MiuixIcons.Lock,
+            )
+            ManagerRow(
                 title = stringResource(R.string.about_requirement),
                 summary = stringResource(R.string.about_requirement_summary),
                 icon = MiuixIcons.Settings,
@@ -791,20 +1104,6 @@ private fun AboutDetailsSection(
                 title = stringResource(R.string.about_license),
                 summary = stringResource(R.string.about_license_value),
                 icon = MiuixIcons.Notes,
-            )
-        }
-
-        SmallTitle(text = stringResource(R.string.about_support), insideMargin = SectionTitleMargin)
-        Card(modifier = Modifier.fillMaxWidth(), insideMargin = CardMargin) {
-            ManagerRow(
-                title = stringResource(R.string.about_targets),
-                summary = stringResource(R.string.about_targets_summary),
-                icon = ImageVector.vectorResource(R.drawable.ic_keyboard),
-            )
-            ManagerRow(
-                title = stringResource(R.string.about_providers),
-                summary = stringResource(R.string.about_providers_summary),
-                icon = MiuixIcons.Lock,
             )
         }
 
@@ -834,6 +1133,29 @@ private fun AboutDetailsSection(
             )
         }
     }
+}
+
+@Composable
+private fun SwitchRow(
+    title: String,
+    summary: String,
+    icon: ImageVector,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    BasicComponent(
+        title = title,
+        summary = summary,
+        insideMargin = RowMargin,
+        startAction = { PackageIcon(null, icon) },
+        endActions = {
+            Switch(
+                checked = checked,
+                onCheckedChange = onCheckedChange,
+            )
+        },
+        onClick = { onCheckedChange(!checked) },
+    )
 }
 
 @Composable

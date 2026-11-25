@@ -2,6 +2,7 @@ package com.mugua.keyfill
 
 import android.content.ActivityNotFoundException
 import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
@@ -27,6 +28,12 @@ internal data class AppMetadata(
     val versionCode: Long,
 )
 
+internal data class UiPreferences(
+    val themeMode: Int = 0, // 0: System, 1: Light, 2: Dark
+    val monetEnabled: Boolean = false,
+    val launcherIconHidden: Boolean = false,
+)
+
 internal data class DeviceStatus(
     val autofillProvider: AppIdentity?,
     val defaultKeyboard: AppIdentity?,
@@ -41,18 +48,27 @@ internal interface ManagerActions {
     fun openAutofillSettings(): Boolean
     fun openInputMethodPicker(): Boolean
     fun openInputMethodSettings(): Boolean
+    fun openAppDetails(targetPackage: String): Boolean
     fun requestScope(packages: List<String>, onResult: (Boolean, String?) -> Unit)
     fun openUrl(url: String): Boolean
+    fun updateThemeMode(mode: Int)
+    fun updateMonet(enabled: Boolean)
+    fun updateLauncherIconHidden(hidden: Boolean)
 }
 
 class MainActivity : ComponentActivity(), ManagerActions {
     private var deviceStatus by mutableStateOf(DeviceStatus(null, null, emptyList()))
+    private var uiPrefs by mutableStateOf(UiPreferences())
+
+    private val prefs by lazy { getSharedPreferences("keyfill_prefs", Context.MODE_PRIVATE) }
+    private val launcherAlias by lazy { ComponentName(this, "$packageName.LauncherAlias") }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         XposedServiceBridge.ensureRegistered()
         deviceStatus = readDeviceStatus()
+        uiPrefs = readPreferences()
         val info = packageManager.getPackageInfo(packageName, PackageManager.PackageInfoFlags.of(0L))
         val metadata = AppMetadata(
             packageName = packageName,
@@ -64,6 +80,7 @@ class MainActivity : ComponentActivity(), ManagerActions {
                 status = deviceStatus,
                 xposed = XposedServiceBridge.status,
                 metadata = metadata,
+                preferences = uiPrefs,
                 actions = this,
             )
         }
@@ -83,6 +100,7 @@ class MainActivity : ComponentActivity(), ManagerActions {
 
     override fun refresh(): Boolean {
         deviceStatus = readDeviceStatus()
+        uiPrefs = readPreferences()
         XposedServiceBridge.refresh()
         return true
     }
@@ -120,12 +138,51 @@ class MainActivity : ComponentActivity(), ManagerActions {
         )
     }
 
+    override fun openAppDetails(targetPackage: String): Boolean {
+        return launchFirstAvailable(
+            listOf(
+                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$targetPackage")),
+            ),
+        )
+    }
+
     override fun requestScope(packages: List<String>, onResult: (Boolean, String?) -> Unit) {
         XposedServiceBridge.requestScope(packages, onResult)
     }
 
     override fun openUrl(url: String): Boolean {
         return launchFirstAvailable(listOf(Intent(Intent.ACTION_VIEW, Uri.parse(url))))
+    }
+
+    override fun updateThemeMode(mode: Int) {
+        val clamped = mode.coerceIn(0, 2)
+        prefs.edit().putInt(KEY_THEME_MODE, clamped).apply()
+        uiPrefs = uiPrefs.copy(themeMode = clamped)
+    }
+
+    override fun updateMonet(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_MONET, enabled).apply()
+        uiPrefs = uiPrefs.copy(monetEnabled = enabled)
+    }
+
+    override fun updateLauncherIconHidden(hidden: Boolean) {
+        val state = if (hidden) {
+            PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+        } else {
+            PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+        }
+        packageManager.setComponentEnabledSetting(launcherAlias, state, PackageManager.DONT_KILL_APP)
+        uiPrefs = uiPrefs.copy(launcherIconHidden = hidden)
+    }
+
+    private fun readPreferences(): UiPreferences {
+        val componentState = packageManager.getComponentEnabledSetting(launcherAlias)
+        val hidden = componentState == PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+        return UiPreferences(
+            themeMode = prefs.getInt(KEY_THEME_MODE, 0).coerceIn(0, 2),
+            monetEnabled = prefs.getBoolean(KEY_MONET, false),
+            launcherIconHidden = hidden,
+        )
     }
 
     private fun launchFirstAvailable(intents: List<Intent>): Boolean {
@@ -143,10 +200,10 @@ class MainActivity : ComponentActivity(), ManagerActions {
     }
 
     private fun readDeviceStatus(): DeviceStatus {
-        val keyboards = listOf(
-            AppIdentity(getString(R.string.ime_wechat), KeyboardTarget.WETYPE.packageName),
-            AppIdentity(getString(R.string.ime_xiaoai), KeyboardTarget.XIAO_AI.packageName),
-        ).map { KeyboardStatus(it, findApp(it.packageName) != null) }
+        val keyboards = KeyboardTarget.values().map { target ->
+            val identity = AppIdentity(getString(target.labelRes), target.packageName)
+            KeyboardStatus(identity, findApp(target.packageName) != null)
+        }
 
         val defaultPackage = ComponentName.unflattenFromString(
             Settings.Secure.getString(contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD).orEmpty(),
@@ -177,5 +234,10 @@ class MainActivity : ComponentActivity(), ManagerActions {
         packageManager.getApplicationInfo(name, PackageManager.ApplicationInfoFlags.of(0L))
     } catch (_: PackageManager.NameNotFoundException) {
         null
+    }
+
+    private companion object {
+        const val KEY_THEME_MODE = "theme_mode"
+        const val KEY_MONET = "monet_enabled"
     }
 }
