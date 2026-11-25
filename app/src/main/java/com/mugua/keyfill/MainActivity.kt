@@ -51,6 +51,11 @@ internal data class AppMetadata(
     val packageName: String,
     val versionName: String,
     val versionCode: Long,
+    val deviceName: String,
+    val marketName: String,
+    val androidRelease: String,
+    val sdkInt: Int,
+    val osVersion: String,
 )
 
 internal data class UiPreferences(
@@ -95,10 +100,32 @@ class MainActivity : ComponentActivity(), ManagerActions {
         deviceStatus = readDeviceStatus()
         uiPrefs = readPreferences()
         val info = packageManager.getPackageInfo(packageName, PackageManager.PackageInfoFlags.of(0L))
+        val globalName = Settings.Global.getString(contentResolver, Settings.Global.DEVICE_NAME).orEmpty().trim()
+        val market = sysProp("ro.product.marketname").ifBlank { sysProp("ro.avium.device.codename") }
+        val devName = globalName
+            .ifBlank { market }
+            .ifBlank { sysProp("persist.sys.device_name") }
+            .ifBlank { sysProp("bluetooth.device.default_name") }
+            .ifBlank { "${android.os.Build.BRAND} ${android.os.Build.MODEL}".trim() }
+        val hyperOsInc = sysProp("ro.mi.os.version.incremental")
+        val miuiVer = sysProp("ro.miui.ui.version.name")
+        val cleanDisplay = android.os.Build.DISPLAY.replace("release-keys", "").trim()
+        val osVer = when {
+            hyperOsInc.startsWith("OS") -> "HyperOS ${hyperOsInc.removePrefix("OS")}"
+            hyperOsInc.isNotBlank() -> hyperOsInc
+            miuiVer.isNotBlank() -> "MIUI ${sysProp("ro.build.version.incremental").ifBlank { miuiVer }}"
+            cleanDisplay.isNotBlank() -> cleanDisplay
+            else -> sysProp("ro.build.version.incremental").ifBlank { "Android ${android.os.Build.VERSION.RELEASE}" }
+        }
         val metadata = AppMetadata(
             packageName = packageName,
             versionName = info.versionName.orEmpty(),
             versionCode = info.longVersionCode,
+            deviceName = devName,
+            marketName = "${android.os.Build.MODEL} (${android.os.Build.DEVICE})",
+            androidRelease = android.os.Build.VERSION.RELEASE,
+            sdkInt = android.os.Build.VERSION.SDK_INT,
+            osVersion = osVer,
         )
         setContent {
             ManagerApp(
@@ -266,6 +293,13 @@ class MainActivity : ComponentActivity(), ManagerActions {
         packageManager.getApplicationInfo(name, PackageManager.ApplicationInfoFlags.of(0L))
     } catch (_: PackageManager.NameNotFoundException) {
         null
+    }
+
+    private fun sysProp(key: String): String = try {
+        val cls = Class.forName("android.os.SystemProperties")
+        (cls.getMethod("get", String::class.java, String::class.java).invoke(null, key, "") as? String).orEmpty()
+    } catch (_: ReflectiveOperationException) {
+        ""
     }
 
     private companion object {
