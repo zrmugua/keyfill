@@ -3,25 +3,18 @@ package com.mugua.keyfill
 import android.app.Activity
 import android.content.ClipData
 import android.content.ClipboardManager
-import android.graphics.drawable.GradientDrawable
-import android.text.InputType
-import android.util.TypedValue
-import android.view.View
-import android.view.ViewGroup
-import android.widget.EditText
-import android.widget.LinearLayout
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -29,14 +22,16 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -47,6 +42,11 @@ import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.input.OutputTransformation
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.clearText
+import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
@@ -63,26 +63,33 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.autofill.ContentType
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
+import androidx.compose.ui.semantics.contentType
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
 import io.github.libxposed.service.HookedTarget
 import kotlinx.coroutines.CoroutineScope
@@ -90,7 +97,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.BasicComponent
-import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.Icon
@@ -98,37 +104,44 @@ import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.SmallTitle
-import top.yukonga.miuix.kmp.basic.SmallTopAppBar
 import top.yukonga.miuix.kmp.basic.SnackbarHost
 import top.yukonga.miuix.kmp.basic.SnackbarHostState
 import top.yukonga.miuix.kmp.basic.Switch
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.basic.rememberTopAppBarState
 import top.yukonga.miuix.kmp.blur.Backdrop
+import top.yukonga.miuix.kmp.blur.BlendColorEntry
+import top.yukonga.miuix.kmp.blur.BlurBlendMode
+import top.yukonga.miuix.kmp.blur.BlurDefaults
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
+import top.yukonga.miuix.kmp.blur.textureBlur
+import top.yukonga.miuix.kmp.glass.GlassDialog
+import top.yukonga.miuix.kmp.glass.GlassDialogButton
+import top.yukonga.miuix.kmp.glass.GlassDialogButtonRole
 import top.yukonga.miuix.kmp.glass.GlassDropdownPreference
+import top.yukonga.miuix.kmp.glass.GlassIconButton
 import top.yukonga.miuix.kmp.glass.GlassNavigationBar
 import top.yukonga.miuix.kmp.glass.GlassNavigationItem
+import top.yukonga.miuix.kmp.glass.GlassTextField
+import top.yukonga.miuix.kmp.glass.GlassTopAppBar
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.basic.ArrowRight
+import top.yukonga.miuix.kmp.icon.extended.Clear
 import top.yukonga.miuix.kmp.icon.extended.Contacts
 import top.yukonga.miuix.kmp.icon.extended.Copy
 import top.yukonga.miuix.kmp.icon.extended.Hide
 import top.yukonga.miuix.kmp.icon.extended.Home
 import top.yukonga.miuix.kmp.icon.extended.Info
 import top.yukonga.miuix.kmp.icon.extended.Layers
-import top.yukonga.miuix.kmp.icon.extended.Link
 import top.yukonga.miuix.kmp.icon.extended.Lock
-import top.yukonga.miuix.kmp.icon.extended.Notes
 import top.yukonga.miuix.kmp.icon.extended.Refresh
 import top.yukonga.miuix.kmp.icon.extended.Settings
+import top.yukonga.miuix.kmp.icon.extended.Show
 import top.yukonga.miuix.kmp.icon.extended.Tasks
 import top.yukonga.miuix.kmp.icon.extended.Theme
 import top.yukonga.miuix.kmp.icon.extended.Tune
 import top.yukonga.miuix.kmp.material.GlassEdgeStrokes
-import top.yukonga.miuix.kmp.overlay.OverlayDialog
 import top.yukonga.miuix.kmp.theme.ColorSchemeMode
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.ThemeController
@@ -137,6 +150,7 @@ import top.yukonga.miuix.kmp.theme.lightColorScheme
 import top.yukonga.miuix.kmp.utils.PagerGestureNestedScrollConnection
 import top.yukonga.miuix.kmp.utils.PagerInterceptionMode
 import top.yukonga.miuix.kmp.utils.PagerNavigationSpringSpec
+import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.pagerGestureOverride
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
@@ -148,6 +162,7 @@ private val SectionTitleMargin = PaddingValues(horizontal = 16.dp, vertical = 10
 
 private const val COOLAPK_URL = "https://www.coolapk.com/u/9898174"
 private const val GITHUB_URL = "https://github.com/zrmugua/keyfill"
+private const val ISSUES_URL = "https://github.com/zrmugua/keyfill/issues"
 private const val LICENSE_URL = "https://github.com/zrmugua/keyfill/blob/main/LICENSE"
 
 private enum class HealthState {
@@ -209,11 +224,12 @@ private fun BottomNavigationPill(
     dark: Boolean,
     accent: Color,
 ) {
+    val barInsets = WindowInsets.systemBars.union(WindowInsets.displayCutout)
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .windowInsetsPadding(
-                WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal),
+                barInsets.only(WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal),
             )
             .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 12.dp),
         contentAlignment = Alignment.Center,
@@ -314,9 +330,10 @@ internal fun ManagerApp(
             snapAnimationSpec = PagerNavigationSpringSpec,
         )
 
+        val safeSystemInsets = WindowInsets.systemBars.union(WindowInsets.displayCutout)
         Scaffold(
             modifier = Modifier.fillMaxSize(),
-            contentWindowInsets = WindowInsets.safeDrawing,
+            contentWindowInsets = safeSystemInsets,
             snackbarHost = { SnackbarHost(state = snackbarHostState) },
             bottomBar = {
                 BottomNavigationPill(
@@ -329,6 +346,9 @@ internal fun ManagerApp(
             },
         ) { outerInsets ->
             val layoutDirection = LocalLayoutDirection.current
+            val isAboutActive by remember(pagerState) {
+                derivedStateOf { pagerState.settledPage == 2 && !pagerState.isScrollInProgress }
+            }
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -356,10 +376,13 @@ internal fun ManagerApp(
                                 metadata = metadata,
                                 xposed = xposed,
                                 dark = dark,
+                                playing = isAboutActive,
                                 actions = actions,
                                 showMessage = showMessage,
                             )
                         } else {
+                            val pageListState = rememberLazyListState()
+                            val pageBackdrop = rememberLayerBackdrop()
                             val scrollBehavior = MiuixScrollBehavior(rememberTopAppBarState())
                             val pageTitle = if (pageIndex == 0) stringResource(R.string.module_name) else settingsLabel
                             Scaffold(
@@ -367,13 +390,16 @@ internal fun ManagerApp(
                                 containerColor = Color.Transparent,
                                 popupHost = {},
                                 topBar = {
-                                    TopAppBar(
+                                    GlassTopAppBar(
                                         title = pageTitle,
-                                        color = colors.surface,
+                                        isContentScrolled = pageListState.canScrollBackward,
+                                        expandable = true,
+                                        progressiveBlur = true,
+                                        backdrop = pageBackdrop,
                                         scrollBehavior = scrollBehavior,
                                         actions = {
                                             if (pageIndex == 0) {
-                                                IconButton(
+                                                GlassIconButton(
                                                     onClick = {
                                                         actions.refresh()
                                                         showMessage(refreshedMessage)
@@ -396,63 +422,72 @@ internal fun ManagerApp(
                                     top = pageInsets.calculateTopPadding() + 8.dp,
                                     bottom = outerInsets.calculateBottomPadding() + 16.dp,
                                 )
-                                LazyColumn(
+                                Box(
                                     modifier = Modifier
                                         .fillMaxSize()
-                                        .scrollEndHaptic()
-                                        .overScrollVertical()
-                                        .nestedScroll(scrollBehavior.nestedScrollConnection),
-                                    contentPadding = contentPadding,
-                                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                                        .layerBackdrop(pageBackdrop)
+                                        .background(colors.surface),
                                 ) {
-                                    if (pageIndex == 0) {
-                                        item {
-                                            StatusHeroCard(
-                                                status = status,
-                                                xposed = xposed,
-                                                metadata = metadata,
-                                                dark = dark,
-                                                actions = actions,
-                                                showMessage = showMessage,
-                                            )
-                                        }
-                                        item {
-                                            EnvironmentSection(
-                                                status = status,
-                                                xposed = xposed,
-                                                keyboardIcon = keyboardVector,
-                                                actions = actions,
-                                                showMessage = showMessage,
-                                            )
-                                        }
-                                        item {
-                                            SupportedKeyboardsSection(
-                                                status = status,
-                                                xposed = xposed,
-                                                keyboardIcon = keyboardVector,
-                                                actions = actions,
-                                                showMessage = showMessage,
-                                            )
-                                        }
-                                        if (xposed.runningTargets.isNotEmpty()) {
+                                    LazyColumn(
+                                        state = pageListState,
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .scrollEndHaptic()
+                                            .overScrollVertical()
+                                            .nestedScroll(scrollBehavior.nestedScrollConnection),
+                                        contentPadding = contentPadding,
+                                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                                    ) {
+                                        if (pageIndex == 0) {
                                             item {
-                                                HookedProcessesSection(
+                                                StatusHeroCard(
                                                     status = status,
-                                                    targets = xposed.runningTargets,
+                                                    xposed = xposed,
+                                                    metadata = metadata,
+                                                    dark = dark,
+                                                    actions = actions,
+                                                    showMessage = showMessage,
+                                                )
+                                            }
+                                            item {
+                                                EnvironmentSection(
+                                                    status = status,
+                                                    xposed = xposed,
                                                     keyboardIcon = keyboardVector,
                                                     actions = actions,
                                                     showMessage = showMessage,
                                                 )
                                             }
-                                        }
-                                    } else {
-                                        item {
-                                            SettingsSection(
-                                                preferences = preferences,
-                                                actions = actions,
-                                                onOpenTest = { showTestDialog = true },
-                                                showMessage = showMessage,
-                                            )
+                                            item {
+                                                SupportedKeyboardsSection(
+                                                    status = status,
+                                                    xposed = xposed,
+                                                    keyboardIcon = keyboardVector,
+                                                    actions = actions,
+                                                    showMessage = showMessage,
+                                                )
+                                            }
+                                            if (xposed.runningTargets.isNotEmpty()) {
+                                                item {
+                                                    HookedProcessesSection(
+                                                        status = status,
+                                                        targets = xposed.runningTargets,
+                                                        keyboardIcon = keyboardVector,
+                                                        actions = actions,
+                                                        showMessage = showMessage,
+                                                    )
+                                                }
+                                            }
+                                        } else {
+                                            item {
+                                                SettingsSection(
+                                                    preferences = preferences,
+                                                    backdrop = backdrop,
+                                                    actions = actions,
+                                                    onOpenTest = { showTestDialog = true },
+                                                    showMessage = showMessage,
+                                                )
+                                            }
                                         }
                                     }
                                 }
@@ -462,13 +497,11 @@ internal fun ManagerApp(
                 }
             }
 
-            if (showTestDialog) {
-                AutofillTestDialog(
-                    show = true,
-                    dark = dark,
-                    onDismiss = { showTestDialog = false },
-                )
-            }
+            AutofillTestDialog(
+                show = showTestDialog,
+                backdrop = backdrop,
+                onDismiss = { showTestDialog = false },
+            )
         }
     }
 }
@@ -563,37 +596,40 @@ private fun StatusHeroCard(
 
     Card(
         modifier = Modifier.fillMaxWidth(),
+        cornerRadius = 20.dp,
         colors = CardDefaults.defaultColors(color = container),
         insideMargin = CardMargin,
+        pressFeedbackType = PressFeedbackType.Sink,
+        showIndication = true,
+        onClick = {
+            when {
+                !xposed.active || health == HealthState.WORKING -> {
+                    actions.refresh()
+                    showMessage(refreshedMsg)
+                }
+                health == HealthState.RELOAD_NEEDED && keyboard != null -> {
+                    if (!actions.openAppDetails(keyboard.packageName)) showMessage(openFailedMsg)
+                }
+                !xposed.hasSystemScope || currentKeyboardUnscoped -> {
+                    actions.requestScope(missingScopes) { ok, reason ->
+                        showMessage(
+                            if (ok) scopeApprovedMsg else String.format(scopeFailedPattern, reason ?: "-"),
+                        )
+                    }
+                }
+                provider == null -> {
+                    if (!actions.openAutofillSettings()) showMessage(openFailedMsg)
+                }
+                !status.hasSupportedKeyboard -> {
+                    if (!actions.openInputMethodPicker()) showMessage(openFailedMsg)
+                }
+            }
+        },
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 128.dp)
-                .clickable {
-                    when {
-                        !xposed.active || health == HealthState.WORKING -> {
-                            actions.refresh()
-                            showMessage(refreshedMsg)
-                        }
-                        health == HealthState.RELOAD_NEEDED && keyboard != null -> {
-                            if (!actions.openAppDetails(keyboard.packageName)) showMessage(openFailedMsg)
-                        }
-                        !xposed.hasSystemScope || currentKeyboardUnscoped -> {
-                            actions.requestScope(missingScopes) { ok, reason ->
-                                showMessage(
-                                    if (ok) scopeApprovedMsg else String.format(scopeFailedPattern, reason ?: "-"),
-                                )
-                            }
-                        }
-                        provider == null -> {
-                            if (!actions.openAutofillSettings()) showMessage(openFailedMsg)
-                        }
-                        !status.hasSupportedKeyboard -> {
-                            if (!actions.openInputMethodPicker()) showMessage(openFailedMsg)
-                        }
-                    }
-                },
+                .heightIn(min = 128.dp),
             contentAlignment = Alignment.CenterStart,
         ) {
             Canvas(Modifier.matchParentSize()) {
@@ -690,7 +726,7 @@ private fun EnvironmentSection(
 
     Column {
         SmallTitle(text = stringResource(R.string.section_environment), insideMargin = SectionTitleMargin)
-        Card(modifier = Modifier.fillMaxWidth(), insideMargin = CardMargin) {
+        Card(modifier = Modifier.fillMaxWidth(), cornerRadius = 20.dp, insideMargin = CardMargin) {
             ManagerRow(
                 title = stringResource(R.string.status_framework),
                 summary = frameworkSummary,
@@ -766,7 +802,7 @@ private fun SupportedKeyboardsSection(
 
     Column {
         SmallTitle(text = stringResource(R.string.ime_supported), insideMargin = SectionTitleMargin)
-        Card(modifier = Modifier.fillMaxWidth(), insideMargin = CardMargin) {
+        Card(modifier = Modifier.fillMaxWidth(), cornerRadius = 20.dp, insideMargin = CardMargin) {
             status.keyboards.forEach { keyboard ->
                 val pkg = keyboard.app.packageName
                 val isCurrent = pkg == status.defaultKeyboard?.packageName
@@ -835,7 +871,7 @@ private fun HookedProcessesSection(
 
     Column {
         SmallTitle(text = stringResource(R.string.section_processes), insideMargin = SectionTitleMargin)
-        Card(modifier = Modifier.fillMaxWidth(), insideMargin = CardMargin) {
+        Card(modifier = Modifier.fillMaxWidth(), cornerRadius = 20.dp, insideMargin = CardMargin) {
             targets.forEach { target ->
                 val matchedKeyboard = status.keyboards.firstOrNull {
                     target.processName == it.app.packageName || target.processName.startsWith("${it.app.packageName}:")
@@ -878,6 +914,7 @@ private fun HookedProcessesSection(
 @Composable
 private fun SettingsSection(
     preferences: UiPreferences,
+    backdrop: Backdrop,
     actions: ManagerActions,
     onOpenTest: () -> Unit,
     showMessage: (String) -> Unit,
@@ -892,13 +929,13 @@ private fun SettingsSection(
 
     Column {
         SmallTitle(text = stringResource(R.string.section_appearance), insideMargin = SectionTitleMargin)
-        Card(modifier = Modifier.fillMaxWidth(), insideMargin = CardMargin) {
+        Card(modifier = Modifier.fillMaxWidth(), cornerRadius = 20.dp, insideMargin = CardMargin) {
             GlassDropdownPreference(
                 title = stringResource(R.string.pref_theme_mode),
                 items = modeOptions,
                 selectedIndex = preferences.themeMode,
                 onSelectedIndexChange = { actions.updateThemeMode(it) },
-                backdrop = null,
+                backdrop = backdrop,
                 insideMargin = RowMargin,
                 startAction = { PackageIcon(null, MiuixIcons.Theme) },
             )
@@ -912,7 +949,7 @@ private fun SettingsSection(
         }
 
         SmallTitle(text = stringResource(R.string.section_tools), insideMargin = SectionTitleMargin)
-        Card(modifier = Modifier.fillMaxWidth(), insideMargin = CardMargin) {
+        Card(modifier = Modifier.fillMaxWidth(), cornerRadius = 20.dp, insideMargin = CardMargin) {
             SwitchRow(
                 title = stringResource(R.string.pref_hide_icon),
                 summary = stringResource(R.string.pref_hide_icon_summary),
@@ -937,93 +974,143 @@ private fun SettingsSection(
 @Composable
 private fun AutofillTestDialog(
     show: Boolean,
-    dark: Boolean,
+    backdrop: Backdrop?,
     onDismiss: () -> Unit,
 ) {
-    val usernameHint = stringResource(R.string.test_hint_username)
-    val passwordHint = stringResource(R.string.test_hint_password)
-    val textColor = MiuixTheme.colorScheme.onSurface.toArgb()
-    val hintColor = MiuixTheme.colorScheme.onSurfaceVariantSummary.toArgb()
-    val fieldBg = (if (dark) Color(0xFF232C3B) else Color(0xFFF0F4FA)).toArgb()
+    val colors = MiuixTheme.colorScheme
+    val usernameState = rememberTextFieldState()
+    val passwordState = rememberTextFieldState()
+    var passwordVisible by rememberSaveable { mutableStateOf(false) }
+    val maskTransformation = remember {
+        OutputTransformation {
+            replace(0, length, "\u2022".repeat(length))
+        }
+    }
 
-    OverlayDialog(
+    GlassDialog(
         show = show,
+        onDismissRequest = onDismiss,
+        backdrop = backdrop,
         title = stringResource(R.string.test_dialog_title),
         summary = stringResource(R.string.test_dialog_summary),
-        onDismissRequest = onDismiss,
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
-            AndroidView(
-                modifier = Modifier.fillMaxWidth(),
-                factory = { ctx ->
-                    val density = ctx.resources.displayMetrics.density
-                    fun dpPx(v: Int): Int = (v * density).toInt()
-                    fun buildInput(hintText: String, autofillHint: String, inputType: Int): EditText {
-                        return EditText(ctx).apply {
-                            hint = hintText
-                            this.inputType = inputType
-                            isSingleLine = true
-                            setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
-                            setPadding(dpPx(14), dpPx(13), dpPx(14), dpPx(13))
-                            importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_YES
-                            setAutofillHints(autofillHint)
+            GlassTextField(
+                state = usernameState,
+                label = stringResource(R.string.test_hint_username),
+                useLabelAsPlaceholder = true,
+                lineLimits = TextFieldLineLimits.SingleLine,
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Email,
+                    imeAction = ImeAction.Next,
+                ),
+                leadingIcon = {
+                    Icon(
+                        imageVector = MiuixIcons.Contacts,
+                        contentDescription = null,
+                        tint = colors.onSurfaceVariantSummary,
+                        modifier = Modifier
+                            .padding(start = 16.dp, end = 10.dp)
+                            .size(20.dp),
+                    )
+                },
+                trailingIcon = if (usernameState.text.isNotEmpty()) {
+                    {
+                        IconButton(
+                            onClick = { usernameState.clearText() },
+                            modifier = Modifier.padding(end = 6.dp),
+                        ) {
+                            Icon(
+                                imageVector = MiuixIcons.Clear,
+                                contentDescription = null,
+                                tint = colors.onSurfaceVariantSummary,
+                                modifier = Modifier.size(18.dp),
+                            )
                         }
                     }
-                    LinearLayout(ctx).apply {
-                        orientation = LinearLayout.VERTICAL
-                        importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_YES
-                        val userField = buildInput(
-                            usernameHint,
-                            View.AUTOFILL_HINT_USERNAME,
-                            InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS,
-                        )
-                        val passField = buildInput(
-                            passwordHint,
-                            View.AUTOFILL_HINT_PASSWORD,
-                            InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD,
-                        )
-                        addView(
-                            userField,
-                            LinearLayout.LayoutParams(
-                                ViewGroup.LayoutParams.MATCH_PARENT,
-                                ViewGroup.LayoutParams.WRAP_CONTENT,
-                            ).apply { bottomMargin = dpPx(10) },
-                        )
-                        addView(
-                            passField,
-                            LinearLayout.LayoutParams(
-                                ViewGroup.LayoutParams.MATCH_PARENT,
-                                ViewGroup.LayoutParams.WRAP_CONTENT,
-                            ),
-                        )
-                    }
+                } else {
+                    null
                 },
-                update = { container ->
-                    val density = container.resources.displayMetrics.density
-                    for (i in 0 until container.childCount) {
-                        val child = container.getChildAt(i) as? EditText ?: continue
-                        child.setTextColor(textColor)
-                        child.setHintTextColor(hintColor)
-                        child.background = GradientDrawable().apply {
-                            cornerRadius = 14f * density
-                            setColor(fieldBg)
-                        }
-                    }
-                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .semantics { contentType = ContentType.Username },
             )
-            Spacer(modifier = Modifier.height(16.dp))
-            Button(
-                onClick = onDismiss,
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            GlassTextField(
+                state = passwordState,
+                label = stringResource(R.string.test_hint_password),
+                useLabelAsPlaceholder = true,
+                lineLimits = TextFieldLineLimits.SingleLine,
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Password,
+                    imeAction = ImeAction.Done,
+                ),
+                outputTransformation = if (passwordVisible) null else maskTransformation,
+                leadingIcon = {
+                    Icon(
+                        imageVector = MiuixIcons.Lock,
+                        contentDescription = null,
+                        tint = colors.onSurfaceVariantSummary,
+                        modifier = Modifier
+                            .padding(start = 16.dp, end = 10.dp)
+                            .size(20.dp),
+                    )
+                },
+                trailingIcon = {
+                    IconButton(
+                        onClick = { passwordVisible = !passwordVisible },
+                        modifier = Modifier.padding(end = 6.dp),
+                    ) {
+                        Icon(
+                            imageVector = if (passwordVisible) MiuixIcons.Show else MiuixIcons.Hide,
+                            contentDescription = null,
+                            tint = colors.onSurfaceVariantSummary,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .semantics { contentType = ContentType.Password },
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            Row(
                 modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Text(
-                    text = stringResource(R.string.action_close),
-                    style = MiuixTheme.textStyles.body1.copy(fontWeight = FontWeight.Medium),
-                )
+                GlassDialogButton(
+                    onClick = {
+                        usernameState.clearText()
+                        passwordState.clearText()
+                    },
+                    role = GlassDialogButtonRole.Normal,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text(
+                        text = stringResource(R.string.action_clear),
+                        style = MiuixTheme.textStyles.body1.copy(fontWeight = FontWeight.Medium),
+                    )
+                }
+                GlassDialogButton(
+                    onClick = onDismiss,
+                    role = GlassDialogButtonRole.Primary,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text(
+                        text = stringResource(R.string.action_close),
+                        style = MiuixTheme.textStyles.body1.copy(fontWeight = FontWeight.Medium),
+                    )
+                }
             }
         }
     }
 }
+
+private val FirstScreenCardsHeight = 276.dp
 
 @Composable
 private fun HyperCeilerAboutPage(
@@ -1031,17 +1118,32 @@ private fun HyperCeilerAboutPage(
     metadata: AppMetadata,
     xposed: XposedStatus,
     dark: Boolean,
+    playing: Boolean,
     actions: ManagerActions,
     showMessage: (String) -> Unit,
 ) {
-    val colors = MiuixTheme.colorScheme
     val layoutDirection = LocalLayoutDirection.current
     val listState = rememberLazyListState()
-    val showCompactTitle by remember(listState) {
+    val aboutBackdrop = rememberLayerBackdrop()
+    val contentBackdrop = rememberLayerBackdrop()
+
+    val scrollProgress by remember(listState) {
         derivedStateOf {
-            listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 220
+            when {
+                listState.firstVisibleItemIndex > 0 -> 1f
+                else -> {
+                    val spacer = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == "logo_spacer" }
+                    if (spacer != null && spacer.size > 0) {
+                        (listState.firstVisibleItemScrollOffset.toFloat() / spacer.size).coerceIn(0f, 1f)
+                    } else {
+                        0f
+                    }
+                }
+            }
         }
     }
+    val showCompactTitle by remember { derivedStateOf { scrollProgress >= 0.48f } }
+    val topBarScrolled by remember { derivedStateOf { scrollProgress >= 0.55f } }
     val titleAlpha by animateFloatAsState(
         targetValue = if (showCompactTitle) 1f else 0f,
         animationSpec = tween(durationMillis = 180),
@@ -1052,168 +1154,459 @@ private fun HyperCeilerAboutPage(
         containerColor = Color.Transparent,
         popupHost = {},
         topBar = {
-            SmallTopAppBar(
+            GlassTopAppBar(
                 title = stringResource(R.string.manager_about),
-                color = if (showCompactTitle) colors.surface else Color.Transparent,
-                titleColor = colors.onSurface.copy(alpha = titleAlpha),
+                isContentScrolled = topBarScrolled,
+                expandable = false,
+                progressiveBlur = true,
+                backdrop = contentBackdrop,
+                titleAlpha = { titleAlpha },
+                backgroundAlpha = { ((scrollProgress - 0.55f) / 0.35f).coerceIn(0f, 1f) },
             )
         },
     ) { pageInsets ->
+        val topPadding = pageInsets.calculateTopPadding()
+        val bottomInset = outerInsets.calculateBottomPadding()
         val contentPadding = PaddingValues(
             start = outerInsets.calculateStartPadding(layoutDirection) + 12.dp,
             end = outerInsets.calculateEndPadding(layoutDirection) + 12.dp,
-            top = pageInsets.calculateTopPadding(),
-            bottom = outerInsets.calculateBottomPadding() + 16.dp,
+            top = topPadding,
+            bottom = bottomInset + 18.dp,
         )
-        LazyColumn(
-            state = listState,
+
+        HyperOsAboutBackground(
+            dark = dark,
+            playing = playing,
             modifier = Modifier
                 .fillMaxSize()
-                .scrollEndHaptic()
-                .overScrollVertical(),
-            contentPadding = contentPadding,
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+                .layerBackdrop(contentBackdrop),
+            bgModifier = Modifier.layerBackdrop(aboutBackdrop),
+            alpha = { (1f - scrollProgress).coerceIn(0f, 1f) },
         ) {
-            item(key = "about_header") {
-                Column(
+            BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                val headerHeight = (maxHeight - topPadding - bottomInset - FirstScreenCardsHeight)
+                    .coerceIn(280.dp, 430.dp)
+
+                AboutVersionHeader(
+                    metadata = metadata,
+                    dark = dark,
+                    aboutBackdrop = aboutBackdrop,
+                    topPadding = topPadding,
+                    headerHeight = headerHeight,
+                    scrollProgress = { scrollProgress },
+                )
+
+                LazyColumn(
+                    state = listState,
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 18.dp, bottom = 14.dp, start = 16.dp, end = 16.dp)
-                        .graphicsLayer {
-                            val progress = if (listState.firstVisibleItemIndex > 0) {
-                                1f
-                            } else {
-                                (listState.firstVisibleItemScrollOffset / 340f).coerceIn(0f, 1f)
-                            }
-                            alpha = 1f - progress
-                            val scale = 1f - (progress * 0.08f)
-                            scaleX = scale
-                            scaleY = scale
-                        },
-                    horizontalAlignment = Alignment.CenterHorizontally,
+                        .fillMaxSize()
+                        .scrollEndHaptic()
+                        .overScrollVertical(),
+                    contentPadding = contentPadding,
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    val iconShape = RoundedCornerShape(22.dp)
-                    Box(
-                        modifier = Modifier
-                            .size(86.dp)
-                            .clip(iconShape)
-                            .background(Color(0xFFF6F9FE))
-                            .border(
-                                width = 1.dp,
-                                color = if (dark) Color.White.copy(alpha = 0.10f) else Color(0xFFDCE6F5),
-                                shape = iconShape,
-                            ),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Image(
-                            painter = painterResource(R.drawable.ic_launcher_foreground),
-                            contentDescription = null,
-                            modifier = Modifier.size(72.dp),
+                    item(key = "logo_spacer") {
+                        Spacer(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(headerHeight),
                         )
                     }
-                    Text(
-                        text = stringResource(R.string.module_name),
-                        modifier = Modifier.padding(top = 14.dp),
-                        style = MiuixTheme.textStyles.headline1.copy(fontSize = 27.sp, fontWeight = FontWeight.Bold),
-                        color = colors.onSurface,
-                    )
-                    Box(
-                        modifier = Modifier
-                            .padding(top = 8.dp)
-                            .clip(RoundedCornerShape(50))
-                            .background(colors.primary.copy(alpha = if (dark) 0.18f else 0.10f))
-                            .padding(horizontal = 12.dp, vertical = 4.dp),
-                    ) {
-                        Text(
-                            text = stringResource(R.string.about_version, metadata.versionName, metadata.versionCode),
-                            style = MiuixTheme.textStyles.body2.copy(fontSize = 13.sp, fontWeight = FontWeight.SemiBold),
-                            color = colors.primary,
+                    item(key = "device_info") {
+                        MyDeviceOverviewSection(
+                            metadata = metadata,
+                            xposed = xposed,
+                            dark = dark,
                         )
                     }
-                    Text(
-                        text = stringResource(R.string.about_autofill_description),
-                        modifier = Modifier.widthIn(max = 280.dp).padding(top = 12.dp),
-                        style = MiuixTheme.textStyles.body2,
-                        color = colors.onSurfaceVariantSummary,
-                        textAlign = TextAlign.Center,
-                    )
+                    item(key = "author_card") {
+                        AuthorCard(dark = dark, actions = actions, showMessage = showMessage)
+                    }
+                    item(key = "project_card") {
+                        AboutProjectCard(
+                            metadata = metadata,
+                            dark = dark,
+                            actions = actions,
+                            showMessage = showMessage,
+                        )
+                    }
+                    item(key = "credits_card") {
+                        AboutCreditsCard(dark = dark, actions = actions, showMessage = showMessage)
+                    }
                 }
             }
+        }
+    }
+}
 
-            item(key = "about_bento") {
-                val apiValue = if (xposed.active) {
-                    "API ${xposed.apiVersion}"
-                } else {
-                    stringResource(R.string.about_xposed_api_default)
-                }
-                val apiSub = if (xposed.active) {
-                    "${xposed.frameworkName} ${xposed.frameworkVersion}"
-                } else {
-                    stringResource(R.string.about_xposed_api_sub)
+@Composable
+private fun AboutVersionHeader(
+    metadata: AppMetadata,
+    dark: Boolean,
+    aboutBackdrop: Backdrop,
+    topPadding: Dp,
+    headerHeight: Dp,
+    scrollProgress: () -> Float,
+) {
+    val context = LocalContext.current
+    val isDebug = remember(context) {
+        (context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
+    }
+    val channelLabel = stringResource(
+        if (isDebug) R.string.about_channel_debug else R.string.about_channel_release,
+    )
+    val logoBlend = remember(dark) {
+        if (dark) {
+            listOf(
+                BlendColorEntry(Color(0xE6A1A1A1), BlurBlendMode.ColorDodge),
+                BlendColorEntry(Color(0x4DE6E6E6), BlurBlendMode.LinearLight),
+                BlendColorEntry(Color(0xFF1AF500), BlurBlendMode.Lab),
+            )
+        } else {
+            listOf(
+                BlendColorEntry(Color(0xCC4A4A4A), BlurBlendMode.ColorBurn),
+                BlendColorEntry(Color(0xFF4F4F4F), BlurBlendMode.LinearLight),
+                BlendColorEntry(Color(0xFF1AF200), BlurBlendMode.Lab),
+            )
+        }
+    }
+    val logoBlurColors = BlurDefaults.blurColors(blendColors = logoBlend)
+    val iconBlurEnabled by remember { derivedStateOf { scrollProgress() < 0.62f } }
+    val titleBlurEnabled by remember { derivedStateOf { scrollProgress() < 0.44f } }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = topPadding)
+            .height(headerHeight),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Canvas(
+                modifier = Modifier
+                    .graphicsLayer {
+                        val p = ((scrollProgress() - 0.34f) / 0.24f).coerceIn(0f, 1f)
+                        alpha = 1f - p
+                        val s = 1f - p * 0.08f
+                        scaleX = s
+                        scaleY = s
+                    }
+                    .size(90.dp)
+                    .textureBlur(
+                        backdrop = aboutBackdrop,
+                        shape = RoundedCornerShape(24.dp),
+                        blurRadius = 100f,
+                        colors = logoBlurColors,
+                        contentBlendMode = BlendMode.DstIn,
+                        enabled = iconBlurEnabled,
+                    ),
+            ) {
+                val w = size.width
+                val cx = w * 0.5f
+                val cy = size.height * 0.5f
+                val ringRadius = w * 0.265f
+                val strokePx = w * 0.155f
+                drawRoundRect(
+                    color = Color.White,
+                    cornerRadius = CornerRadius(24.dp.toPx()),
+                )
+                drawArc(
+                    color = Color.Black,
+                    startAngle = 42f,
+                    sweepAngle = 276f,
+                    useCenter = false,
+                    topLeft = Offset(cx - ringRadius, cy - ringRadius),
+                    size = Size(ringRadius * 2f, ringRadius * 2f),
+                    style = Stroke(width = strokePx, cap = StrokeCap.Round),
+                    blendMode = BlendMode.Clear,
+                )
+                drawLine(
+                    color = Color.Black,
+                    start = Offset(cx, cy),
+                    end = Offset(cx + ringRadius, cy),
+                    strokeWidth = strokePx,
+                    cap = StrokeCap.Round,
+                    blendMode = BlendMode.Clear,
+                )
+            }
+
+            Spacer(modifier = Modifier.height(18.dp))
+
+            Text(
+                text = stringResource(R.string.module_name),
+                style = MiuixTheme.textStyles.headline1.copy(
+                    fontSize = 38.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = (-0.5).sp,
+                ),
+                color = MiuixTheme.colorScheme.onSurface,
+                modifier = Modifier
+                    .graphicsLayer {
+                        val p = ((scrollProgress() - 0.18f) / 0.22f).coerceIn(0f, 1f)
+                        alpha = 1f - p
+                        val s = 1f - p * 0.08f
+                        scaleX = s
+                        scaleY = s
+                    }
+                    .textureBlur(
+                        backdrop = aboutBackdrop,
+                        shape = RoundedCornerShape(14.dp),
+                        blurRadius = 100f,
+                        colors = logoBlurColors,
+                        contentBlendMode = BlendMode.DstIn,
+                        enabled = titleBlurEnabled,
+                    )
+                    .padding(horizontal = 10.dp, vertical = 2.dp),
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = stringResource(
+                    R.string.about_version_line,
+                    metadata.versionName,
+                    metadata.versionCode,
+                    channelLabel,
+                ),
+                style = MiuixTheme.textStyles.body2.copy(fontSize = 14.sp),
+                color = if (dark) Color(0x99FFFFFF) else Color(0x99000000),
+                modifier = Modifier.graphicsLayer {
+                    val p = ((scrollProgress() - 0.05f) / 0.20f).coerceIn(0f, 1f)
+                    alpha = 1f - p
+                    val s = 1f - p * 0.06f
+                    scaleX = s
+                    scaleY = s
+                },
+            )
+        }
+    }
+}
+
+@Composable
+private fun AboutGlassCard(
+    dark: Boolean,
+    modifier: Modifier = Modifier,
+    insideMargin: PaddingValues = CardMargin,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val fill = if (dark) Color(0x1CFFFFFF) else Color(0xCCFFFFFF)
+    Card(
+        modifier = modifier,
+        cornerRadius = 20.dp,
+        insideMargin = insideMargin,
+        colors = CardDefaults.defaultColors(color = fill),
+        content = content,
+    )
+}
+
+@Composable
+private fun MyDeviceOverviewSection(
+    metadata: AppMetadata,
+    xposed: XposedStatus,
+    dark: Boolean,
+) {
+    val frameworkTitle = if (xposed.active) xposed.frameworkName else stringResource(R.string.status_inactive)
+    val frameworkSub = if (xposed.active) {
+        "${xposed.frameworkVersion} · API ${xposed.apiVersion}"
+    } else {
+        stringResource(R.string.about_xposed_api_default)
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            MyDeviceBentoTile(
+                label = stringResource(R.string.about_bento_device),
+                value = metadata.deviceName,
+                sub = metadata.marketName,
+                dark = dark,
+                modifier = Modifier.weight(1f),
+            )
+            MyDeviceBentoTile(
+                label = stringResource(R.string.about_bento_framework),
+                value = frameworkTitle,
+                sub = frameworkSub,
+                dark = dark,
+                modifier = Modifier.weight(1f),
+            )
+        }
+
+        AboutGlassCard(
+            dark = dark,
+            modifier = Modifier.fillMaxWidth(),
+            insideMargin = PaddingValues(horizontal = 18.dp, vertical = 16.dp),
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    MyDeviceSpecCell(
+                        value = stringResource(R.string.about_spec_android_val, metadata.androidRelease),
+                        label = stringResource(R.string.about_spec_android_sub, metadata.sdkInt),
+                        modifier = Modifier.weight(1f),
+                    )
+                    MyDeviceSpecCell(
+                        value = stringResource(R.string.about_spec_min_val),
+                        label = stringResource(R.string.about_spec_min_sub),
+                        modifier = Modifier.weight(1f),
+                    )
                 }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    BentoInfoCard(
-                        label = stringResource(R.string.about_xposed_api),
-                        value = apiValue,
-                        sub = apiSub,
+                    MyDeviceSpecCell(
+                        value = metadata.osVersion,
+                        label = stringResource(R.string.about_spec_os_sub),
                         modifier = Modifier.weight(1f),
                     )
-                    BentoInfoCard(
-                        label = stringResource(R.string.about_requirement),
-                        value = stringResource(R.string.about_requirement_value),
-                        sub = stringResource(R.string.about_requirement_sub),
+                    MyDeviceSpecCell(
+                        value = stringResource(R.string.about_spec_autofill_val),
+                        label = stringResource(R.string.about_spec_autofill_sub),
                         modifier = Modifier.weight(1f),
                     )
                 }
-            }
-
-            item(key = "about_details") {
-                AboutCardsColumn(
-                    metadata = metadata,
-                    actions = actions,
-                    showMessage = showMessage,
-                )
             }
         }
     }
 }
 
 @Composable
-private fun BentoInfoCard(
+private fun MyDeviceBentoTile(
     label: String,
     value: String,
     sub: String,
+    dark: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val colors = MiuixTheme.colorScheme
-    Card(modifier = modifier, insideMargin = PaddingValues(16.dp)) {
+    AboutGlassCard(
+        dark = dark,
+        modifier = modifier,
+        insideMargin = PaddingValues(horizontal = 16.dp, vertical = 15.dp),
+    ) {
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(
                 text = label,
-                style = MiuixTheme.textStyles.body2.copy(fontSize = 13.sp),
+                style = MiuixTheme.textStyles.body2.copy(fontSize = 12.sp),
                 color = colors.onSurfaceVariantSummary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
             Text(
                 text = value,
-                modifier = Modifier.padding(top = 2.dp),
-                style = MiuixTheme.textStyles.headline1.copy(fontSize = 20.sp, fontWeight = FontWeight.Bold),
+                style = MiuixTheme.textStyles.headline1.copy(fontSize = 19.sp, fontWeight = FontWeight.Bold),
                 color = colors.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 2.dp),
             )
             Text(
                 text = sub,
                 style = MiuixTheme.textStyles.body2.copy(fontSize = 12.sp),
                 color = colors.onSurfaceVariantSummary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
         }
     }
 }
 
 @Composable
-private fun AboutCardsColumn(
+private fun MyDeviceSpecCell(
+    value: String,
+    label: String,
+    modifier: Modifier = Modifier,
+) {
+    val colors = MiuixTheme.colorScheme
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Text(
+            text = value,
+            style = MiuixTheme.textStyles.body1.copy(fontSize = 15.sp, fontWeight = FontWeight.SemiBold),
+            color = colors.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            text = label,
+            style = MiuixTheme.textStyles.body2.copy(fontSize = 12.sp),
+            color = colors.onSurfaceVariantSummary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+@Composable
+private fun AuthorCard(
+    dark: Boolean,
+    actions: ManagerActions,
+    showMessage: (String) -> Unit,
+) {
+    val colors = MiuixTheme.colorScheme
+    val openFailedMsg = stringResource(R.string.snackbar_open_failed)
+    val coolapkAction = stringResource(R.string.about_coolapk_action)
+
+    AboutGlassCard(dark = dark, modifier = Modifier.fillMaxWidth()) {
+        BasicComponent(
+            title = stringResource(R.string.about_author_name),
+            summary = stringResource(R.string.about_coolapk_summary),
+            insideMargin = RowMargin,
+            startAction = {
+                Box(
+                    modifier = Modifier
+                        .size(42.dp)
+                        .clip(CircleShape)
+                        .background(
+                            Brush.linearGradient(
+                                colors = listOf(Color(0xFF2B74FF), Color(0xFF6AB2FF)),
+                            ),
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = MiuixIcons.Contacts,
+                        contentDescription = null,
+                        modifier = Modifier.size(22.dp),
+                        tint = Color.White,
+                    )
+                }
+            },
+            endActions = {
+                Text(
+                    text = coolapkAction,
+                    style = MiuixTheme.textStyles.body2,
+                    color = colors.onSurfaceVariantActions,
+                    modifier = Modifier
+                        .padding(end = 8.dp)
+                        .align(Alignment.CenterVertically),
+                )
+                Icon(
+                    imageVector = MiuixIcons.Basic.ArrowRight,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(width = 10.dp, height = 16.dp)
+                        .align(Alignment.CenterVertically),
+                    tint = colors.onSurfaceVariantSummary,
+                )
+            },
+            onClick = {
+                if (!actions.openUrl(COOLAPK_URL)) showMessage(openFailedMsg)
+            },
+        )
+    }
+}
+
+@Composable
+private fun AboutProjectCard(
     metadata: AppMetadata,
+    dark: Boolean,
     actions: ManagerActions,
     showMessage: (String) -> Unit,
 ) {
@@ -1224,137 +1617,114 @@ private fun AboutCardsColumn(
     val copiedMsg = stringResource(R.string.snackbar_package_copied)
     val openFailedMsg = stringResource(R.string.snackbar_open_failed)
 
-    Column {
-        SmallTitle(text = stringResource(R.string.section_links), insideMargin = SectionTitleMargin)
-        Card(modifier = Modifier.fillMaxWidth(), insideMargin = CardMargin) {
-            BasicComponent(
-                title = stringResource(R.string.about_author_name),
-                summary = stringResource(R.string.about_coolapk_summary),
-                insideMargin = RowMargin,
-                startAction = {
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(colors.primary.copy(alpha = 0.14f)),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(
-                            imageVector = MiuixIcons.Contacts,
-                            contentDescription = null,
-                            modifier = Modifier.size(22.dp),
-                            tint = colors.primary,
-                        )
-                    }
-                },
-                endActions = {
-                    Icon(
-                        imageVector = MiuixIcons.Basic.ArrowRight,
-                        contentDescription = null,
-                        modifier = Modifier.size(15.dp),
-                        tint = colors.onSurfaceVariantSummary,
-                    )
-                },
-                onClick = {
-                    if (!actions.openUrl(COOLAPK_URL)) showMessage(openFailedMsg)
-                },
-            )
-            ActionValueRow(
-                title = stringResource(R.string.about_github),
-                value = stringResource(R.string.about_github_action),
-                icon = MiuixIcons.Link,
-                onClick = {
-                    if (!actions.openUrl(GITHUB_URL)) showMessage(openFailedMsg)
-                },
-            )
-        }
-
-        SmallTitle(text = stringResource(R.string.about_details), insideMargin = SectionTitleMargin)
-        Card(modifier = Modifier.fillMaxWidth(), insideMargin = CardMargin) {
-            BasicComponent(
-                title = packageLabel,
-                summary = metadata.packageName,
-                insideMargin = RowMargin,
-                startAction = { PackageIcon(null, MiuixIcons.Info) },
-                endActions = {
-                    Icon(
-                        imageVector = MiuixIcons.Copy,
-                        contentDescription = copyLabel,
-                        modifier = Modifier.size(20.dp),
-                        tint = colors.onSurfaceVariantSummary,
-                    )
-                },
-                onClickLabel = copyLabel,
-                onClick = {
-                    context.getSystemService(ClipboardManager::class.java)
-                        ?.setPrimaryClip(ClipData.newPlainText(packageLabel, metadata.packageName))
-                    showMessage(copiedMsg)
-                },
-            )
-            ManagerRow(
-                title = stringResource(R.string.about_providers),
-                summary = stringResource(R.string.about_providers_summary),
-                icon = MiuixIcons.Lock,
-            )
-            ActionValueRow(
-                title = stringResource(R.string.about_license),
-                value = stringResource(R.string.about_license_value),
-                icon = MiuixIcons.Notes,
-                onClick = {
-                    if (!actions.openUrl(LICENSE_URL)) showMessage(openFailedMsg)
-                },
-            )
-        }
-
-        SmallTitle(text = stringResource(R.string.about_credits), insideMargin = SectionTitleMargin)
-        Card(modifier = Modifier.fillMaxWidth(), insideMargin = CardMargin) {
-            ManagerRow(
-                title = stringResource(R.string.about_credit_lsposed),
-                summary = stringResource(R.string.about_credit_lsposed_summary),
-                icon = MiuixIcons.Layers,
-                showChevron = true,
-                onClick = {
-                    if (!actions.openUrl("https://github.com/libxposed")) showMessage(openFailedMsg)
-                },
-            )
-            ManagerRow(
-                title = stringResource(R.string.about_credit_miuix),
-                summary = stringResource(R.string.about_credit_miuix_summary),
-                icon = MiuixIcons.Theme,
-                showChevron = true,
-                onClick = {
-                    if (!actions.openUrl("https://github.com/miuix-kotlin-multiplatform/miuix")) {
-                        showMessage(openFailedMsg)
-                    }
-                },
-            )
-        }
+    AboutGlassCard(dark = dark, modifier = Modifier.fillMaxWidth()) {
+        AboutArrowRow(
+            title = stringResource(R.string.about_github),
+            summary = stringResource(R.string.about_github_summary),
+            value = stringResource(R.string.about_github_action),
+            onClick = {
+                if (!actions.openUrl(GITHUB_URL)) showMessage(openFailedMsg)
+            },
+        )
+        AboutArrowRow(
+            title = stringResource(R.string.about_issues),
+            summary = stringResource(R.string.about_issues_summary),
+            value = stringResource(R.string.about_issues_action),
+            onClick = {
+                if (!actions.openUrl(ISSUES_URL)) showMessage(openFailedMsg)
+            },
+        )
+        BasicComponent(
+            title = packageLabel,
+            summary = metadata.packageName,
+            insideMargin = RowMargin,
+            endActions = {
+                Icon(
+                    imageVector = MiuixIcons.Copy,
+                    contentDescription = copyLabel,
+                    modifier = Modifier
+                        .size(19.dp)
+                        .align(Alignment.CenterVertically),
+                    tint = colors.onSurfaceVariantSummary,
+                )
+            },
+            onClickLabel = copyLabel,
+            onClick = {
+                context.getSystemService(ClipboardManager::class.java)
+                    ?.setPrimaryClip(ClipData.newPlainText(packageLabel, metadata.packageName))
+                showMessage(copiedMsg)
+            },
+        )
     }
 }
 
 @Composable
-private fun ActionValueRow(
+private fun AboutCreditsCard(
+    dark: Boolean,
+    actions: ManagerActions,
+    showMessage: (String) -> Unit,
+) {
+    val openFailedMsg = stringResource(R.string.snackbar_open_failed)
+    val githubAction = stringResource(R.string.about_github_action)
+
+    AboutGlassCard(dark = dark, modifier = Modifier.fillMaxWidth()) {
+        AboutArrowRow(
+            title = stringResource(R.string.about_license),
+            value = stringResource(R.string.about_license_value),
+            onClick = {
+                if (!actions.openUrl(LICENSE_URL)) showMessage(openFailedMsg)
+            },
+        )
+        AboutArrowRow(
+            title = stringResource(R.string.about_credit_lsposed),
+            summary = stringResource(R.string.about_credit_lsposed_summary),
+            value = githubAction,
+            onClick = {
+                if (!actions.openUrl("https://github.com/libxposed")) showMessage(openFailedMsg)
+            },
+        )
+        AboutArrowRow(
+            title = stringResource(R.string.about_credit_miuix),
+            summary = stringResource(R.string.about_credit_miuix_summary),
+            value = githubAction,
+            onClick = {
+                if (!actions.openUrl("https://github.com/miuix-kotlin-multiplatform/miuix")) {
+                    showMessage(openFailedMsg)
+                }
+            },
+        )
+    }
+}
+
+@Composable
+private fun AboutArrowRow(
     title: String,
-    value: String,
-    icon: ImageVector,
+    summary: String? = null,
+    value: String? = null,
     onClick: () -> Unit,
 ) {
     val colors = MiuixTheme.colorScheme
     BasicComponent(
         title = title,
+        summary = summary,
         insideMargin = RowMargin,
-        startAction = { PackageIcon(null, icon) },
         endActions = {
-            Text(
-                text = value,
-                style = MiuixTheme.textStyles.body2,
-                color = colors.onSurfaceVariantActions,
-                modifier = Modifier.padding(end = 6.dp),
-            )
+            if (value != null) {
+                Text(
+                    text = value,
+                    style = MiuixTheme.textStyles.body2,
+                    color = colors.onSurfaceVariantActions,
+                    modifier = Modifier
+                        .padding(end = 8.dp)
+                        .align(Alignment.CenterVertically),
+                )
+            }
             Icon(
                 imageVector = MiuixIcons.Basic.ArrowRight,
                 contentDescription = null,
-                modifier = Modifier.size(15.dp),
+                modifier = Modifier
+                    .size(width = 10.dp, height = 16.dp)
+                    .align(Alignment.CenterVertically),
                 tint = colors.onSurfaceVariantSummary,
             )
         },
@@ -1379,6 +1749,7 @@ private fun SwitchRow(
             Switch(
                 checked = checked,
                 onCheckedChange = onCheckedChange,
+                modifier = Modifier.align(Alignment.CenterVertically),
             )
         },
         onClick = { onCheckedChange(!checked) },
@@ -1404,7 +1775,9 @@ private fun ManagerRow(
                 Icon(
                     imageVector = MiuixIcons.Basic.ArrowRight,
                     contentDescription = null,
-                    modifier = Modifier.size(15.dp),
+                    modifier = Modifier
+                        .size(width = 10.dp, height = 16.dp)
+                        .align(Alignment.CenterVertically),
                     tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                 )
             }
