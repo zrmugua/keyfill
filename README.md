@@ -4,7 +4,7 @@
   <p><strong>为第三方 Android 输入法接入原生键盘内联自动填充建议</strong></p>
   <p>
     <a href="https://github.com/zrmugua/keyfill/actions/workflows/build.yml"><img src="https://github.com/zrmugua/keyfill/actions/workflows/build.yml/badge.svg" alt="Build" /></a>
-    <img src="https://img.shields.io/badge/Android-16%2B%20(API%2036)-1B5EF2" alt="Android 16+" />
+    <img src="https://img.shields.io/badge/Android-13%2B%20(API%2033)-1B5EF2" alt="Android 13+" />
     <img src="https://img.shields.io/badge/Xposed-libxposed%20API%20102-3B82F6" alt="libxposed API 102" />
     <a href="https://www.coolapk.com/u/9898174"><img src="https://img.shields.io/badge/Coolapk-%40%E6%9C%A8%E7%93%9C-11B981" alt="Coolapk" /></a>
     <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-64748B" alt="License" /></a>
@@ -36,7 +36,7 @@
 
 ## 环境要求与支持列表
 
-- **系统版本**：Android 16+（API 36+）
+- **系统版本**：Android 13+（API 33+，兼容 HyperOS 1 / 2 / 3 及原生 AOSP）
 - **Xposed 框架**：支持 **libxposed API 102** 的现代框架（如新版 LSPosed）
 - **适配输入法**：
   - 微信输入法（`com.tencent.wetype`）

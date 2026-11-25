@@ -17,6 +17,31 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.core.graphics.drawable.toBitmap
+import java.util.concurrent.ConcurrentHashMap
+
+internal object AppIconCache {
+    private val cache = ConcurrentHashMap<String, ImageBitmap>()
+
+    fun preload(pm: PackageManager, packageName: String?) {
+        if (packageName.isNullOrBlank() || cache.containsKey(packageName)) return
+        try {
+            cache[packageName] = pm.getApplicationIcon(packageName).toBitmap(96, 96).asImageBitmap()
+        } catch (_: PackageManager.NameNotFoundException) {
+            // Package is not installed.
+        }
+    }
+
+    fun get(pm: PackageManager, packageName: String?): ImageBitmap? {
+        if (packageName.isNullOrBlank()) return null
+        return cache[packageName] ?: run {
+            preload(pm, packageName)
+            cache[packageName]
+        }
+    }
+}
 
 internal data class AppIdentity(val label: String, val packageName: String)
 
@@ -223,6 +248,13 @@ class MainActivity : ComponentActivity(), ManagerActions {
             }
             AppIdentity(label, name)
         }
+        for (keyboard in keyboards) {
+            if (keyboard.installed) {
+                AppIconCache.preload(packageManager, keyboard.app.packageName)
+            }
+        }
+        AppIconCache.preload(packageManager, defaultKeyboard?.packageName)
+        AppIconCache.preload(packageManager, provider?.packageName)
         return DeviceStatus(provider, defaultKeyboard, keyboards)
     }
 

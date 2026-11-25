@@ -1,0 +1,3 @@
+-keep class com.mugua.keyfill.** { *; }
+-keep class io.github.libxposed.** { *; }
+-dontwarn io.github.libxposed.api.**

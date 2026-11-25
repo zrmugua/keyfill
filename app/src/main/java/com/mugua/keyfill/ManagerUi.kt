@@ -3,7 +3,6 @@ package com.mugua.keyfill
 import android.app.Activity
 import android.content.ClipData
 import android.content.ClipboardManager
-import android.content.pm.PackageManager
 import android.graphics.drawable.GradientDrawable
 import android.text.InputType
 import android.util.TypedValue
@@ -12,15 +11,19 @@ import android.view.ViewGroup
 import android.widget.EditText
 import android.widget.LinearLayout
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
@@ -37,25 +40,35 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerDefaults
+import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -70,9 +83,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.core.graphics.drawable.toBitmap
 import androidx.core.view.WindowCompat
 import io.github.libxposed.service.HookedTarget
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.Button
@@ -83,6 +98,7 @@ import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.SmallTitle
+import top.yukonga.miuix.kmp.basic.SmallTopAppBar
 import top.yukonga.miuix.kmp.basic.SnackbarHost
 import top.yukonga.miuix.kmp.basic.SnackbarHostState
 import top.yukonga.miuix.kmp.basic.Switch
@@ -118,8 +134,11 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.ThemeController
 import top.yukonga.miuix.kmp.theme.darkColorScheme
 import top.yukonga.miuix.kmp.theme.lightColorScheme
+import top.yukonga.miuix.kmp.utils.PagerGestureNestedScrollConnection
+import top.yukonga.miuix.kmp.utils.PagerInterceptionMode
 import top.yukonga.miuix.kmp.utils.PagerNavigationSpringSpec
 import top.yukonga.miuix.kmp.utils.overScrollVertical
+import top.yukonga.miuix.kmp.utils.pagerGestureOverride
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
 import top.yukonga.miuix.kmp.utils.springAnimateToPage
 
@@ -129,12 +148,92 @@ private val SectionTitleMargin = PaddingValues(horizontal = 16.dp, vertical = 10
 
 private const val COOLAPK_URL = "https://www.coolapk.com/u/9898174"
 private const val GITHUB_URL = "https://github.com/zrmugua/keyfill"
+private const val LICENSE_URL = "https://github.com/zrmugua/keyfill/blob/main/LICENSE"
 
 private enum class HealthState {
     WORKING,
     RELOAD_NEEDED,
     SETUP_NEEDED,
     INACTIVE,
+}
+
+@Stable
+private class PagerTabState(
+    val pagerState: PagerState,
+    private val scope: CoroutineScope,
+) {
+    var selectedPage by mutableIntStateOf(pagerState.currentPage)
+        private set
+    private var navJob: Job? = null
+    private var isNavigating = false
+
+    fun animateToPage(target: Int) {
+        if (target == selectedPage) return
+        navJob?.cancel()
+        selectedPage = target
+        isNavigating = true
+        navJob = scope.launch {
+            val myJob = coroutineContext.job
+            try {
+                pagerState.springAnimateToPage(target)
+            } finally {
+                if (navJob == myJob) {
+                    isNavigating = false
+                    if (pagerState.currentPage != target) {
+                        selectedPage = pagerState.currentPage
+                    }
+                }
+            }
+        }
+    }
+
+    fun syncPage() {
+        if (!isNavigating && selectedPage != pagerState.currentPage) {
+            selectedPage = pagerState.currentPage
+        }
+    }
+}
+
+@Composable
+private fun PagerBackHandler(tabState: PagerTabState) {
+    BackHandler(enabled = tabState.selectedPage != 0) {
+        tabState.animateToPage(0)
+    }
+}
+
+@Composable
+private fun BottomNavigationPill(
+    tabs: List<GlassNavigationItem>,
+    tabState: PagerTabState,
+    backdrop: Backdrop,
+    dark: Boolean,
+    accent: Color,
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .windowInsetsPadding(
+                WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal),
+            )
+            .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 12.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        GlassNavigationBar(
+            items = tabs,
+            selectedIndex = tabState.selectedPage,
+            onSelect = { tabState.animateToPage(it) },
+            backdrop = backdrop,
+            defaultWindowInsetsPadding = false,
+            selectedColor = accent,
+            height = 60.dp,
+            stroke = GlassEdgeStrokes.forTheme(
+                dark,
+                GlassEdgeStrokes.SmallLight,
+                GlassEdgeStrokes.SmallDark,
+            ),
+            modifier = Modifier.widthIn(max = 304.dp).fillMaxWidth(),
+        )
+    }
 }
 
 @Composable
@@ -182,21 +281,24 @@ internal fun ManagerApp(
         val colors = MiuixTheme.colorScheme
         val pagerState = rememberPagerState(initialPage = 0, pageCount = { 3 })
         val scope = rememberCoroutineScope()
+        val tabState = remember(pagerState, scope) { PagerTabState(pagerState, scope) }
+        LaunchedEffect(tabState) {
+            snapshotFlow { tabState.pagerState.currentPage }
+                .collect { tabState.syncPage() }
+        }
+        PagerBackHandler(tabState)
+
         val snackbarHostState = remember { SnackbarHostState() }
         var showTestDialog by rememberSaveable { mutableStateOf(false) }
-        val activeTab = pagerState.targetPage
-
-        BackHandler(enabled = activeTab != 0) {
-            scope.launch { pagerState.springAnimateToPage(0) }
-        }
-
         val pageState = rememberSaveableStateHolder()
         val backdrop = rememberLayerBackdrop()
+
         val homeLabel = stringResource(R.string.manager_home)
         val settingsLabel = stringResource(R.string.manager_settings)
         val aboutLabel = stringResource(R.string.manager_about)
         val refreshLabel = stringResource(R.string.action_refresh)
         val refreshedMessage = stringResource(R.string.snackbar_refreshed)
+        val keyboardVector = ImageVector.vectorResource(R.drawable.ic_keyboard)
         val tabs = remember(homeLabel, settingsLabel, aboutLabel) {
             listOf(
                 GlassNavigationItem(icon = MiuixIcons.Home, label = homeLabel),
@@ -204,44 +306,26 @@ internal fun ManagerApp(
                 GlassNavigationItem(icon = MiuixIcons.Info, label = aboutLabel),
             )
         }
-        val showMessage: (String) -> Unit = { message ->
-            scope.launch { snackbarHostState.showSnackbar(message) }
+        val showMessage: (String) -> Unit = remember(scope, snackbarHostState) {
+            { message -> scope.launch { snackbarHostState.showSnackbar(message) } }
         }
+        val flingBehavior = PagerDefaults.flingBehavior(
+            state = pagerState,
+            snapAnimationSpec = PagerNavigationSpringSpec,
+        )
 
         Scaffold(
             modifier = Modifier.fillMaxSize(),
             contentWindowInsets = WindowInsets.safeDrawing,
             snackbarHost = { SnackbarHost(state = snackbarHostState) },
             bottomBar = {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .windowInsetsPadding(
-                            WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal),
-                        )
-                        .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 12.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    GlassNavigationBar(
-                        items = tabs,
-                        selectedIndex = activeTab,
-                        onSelect = { target ->
-                            if (target != pagerState.targetPage) {
-                                scope.launch { pagerState.springAnimateToPage(target) }
-                            }
-                        },
-                        backdrop = backdrop,
-                        defaultWindowInsetsPadding = false,
-                        selectedColor = colors.primary,
-                        height = 60.dp,
-                        stroke = GlassEdgeStrokes.forTheme(
-                            dark,
-                            GlassEdgeStrokes.SmallLight,
-                            GlassEdgeStrokes.SmallDark,
-                        ),
-                        modifier = Modifier.widthIn(max = 304.dp).fillMaxWidth(),
-                    )
-                }
+                BottomNavigationPill(
+                    tabs = tabs,
+                    tabState = tabState,
+                    backdrop = backdrop,
+                    dark = dark,
+                    accent = colors.primary,
+                )
             },
         ) { outerInsets ->
             val layoutDirection = LocalLayoutDirection.current
@@ -253,65 +337,75 @@ internal fun ManagerApp(
             ) {
                 HorizontalPager(
                     state = pagerState,
-                    modifier = Modifier.fillMaxSize(),
-                    beyondViewportPageCount = 1,
-                    flingBehavior = PagerDefaults.flingBehavior(
-                        state = pagerState,
-                        snapAnimationSpec = PagerNavigationSpringSpec,
-                    ),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .pagerGestureOverride(
+                            pagerState = pagerState,
+                            flingBehavior = flingBehavior,
+                            mode = PagerInterceptionMode.CrossAxis,
+                        ),
+                    userScrollEnabled = false,
+                    pageNestedScrollConnection = PagerGestureNestedScrollConnection,
+                    beyondViewportPageCount = 2,
+                    flingBehavior = flingBehavior,
                 ) { pageIndex ->
                     pageState.SaveableStateProvider(pageIndex) {
-                        val scrollBehavior = MiuixScrollBehavior(rememberTopAppBarState())
-                        val pageTitle = when (pageIndex) {
-                            0 -> stringResource(R.string.module_name)
-                            1 -> settingsLabel
-                            else -> aboutLabel
-                        }
-                        Scaffold(
-                            modifier = Modifier.fillMaxSize(),
-                            containerColor = Color.Transparent,
-                            popupHost = {},
-                            topBar = {
-                                TopAppBar(
-                                    title = pageTitle,
-                                    color = colors.surface,
-                                    scrollBehavior = scrollBehavior,
-                                    actions = {
-                                        if (pageIndex == 0) {
-                                            IconButton(
-                                                onClick = {
-                                                    actions.refresh()
-                                                    showMessage(refreshedMessage)
-                                                },
-                                            ) {
-                                                Icon(
-                                                    imageVector = MiuixIcons.Refresh,
-                                                    contentDescription = refreshLabel,
-                                                    tint = colors.onSurface,
-                                                )
-                                            }
-                                        }
-                                    },
-                                )
-                            },
-                        ) { pageInsets ->
-                            val contentPadding = PaddingValues(
-                                start = outerInsets.calculateStartPadding(layoutDirection) + 12.dp,
-                                end = outerInsets.calculateEndPadding(layoutDirection) + 12.dp,
-                                top = pageInsets.calculateTopPadding() + 8.dp,
-                                bottom = outerInsets.calculateBottomPadding() + 16.dp,
+                        if (pageIndex == 2) {
+                            HyperCeilerAboutPage(
+                                outerInsets = outerInsets,
+                                metadata = metadata,
+                                xposed = xposed,
+                                dark = dark,
+                                actions = actions,
+                                showMessage = showMessage,
                             )
-                            LazyColumn(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .scrollEndHaptic()
-                                    .overScrollVertical()
-                                    .nestedScroll(scrollBehavior.nestedScrollConnection),
-                                contentPadding = contentPadding,
-                                verticalArrangement = Arrangement.spacedBy(12.dp),
-                            ) {
-                                when (pageIndex) {
-                                    0 -> {
+                        } else {
+                            val scrollBehavior = MiuixScrollBehavior(rememberTopAppBarState())
+                            val pageTitle = if (pageIndex == 0) stringResource(R.string.module_name) else settingsLabel
+                            Scaffold(
+                                modifier = Modifier.fillMaxSize(),
+                                containerColor = Color.Transparent,
+                                popupHost = {},
+                                topBar = {
+                                    TopAppBar(
+                                        title = pageTitle,
+                                        color = colors.surface,
+                                        scrollBehavior = scrollBehavior,
+                                        actions = {
+                                            if (pageIndex == 0) {
+                                                IconButton(
+                                                    onClick = {
+                                                        actions.refresh()
+                                                        showMessage(refreshedMessage)
+                                                    },
+                                                ) {
+                                                    Icon(
+                                                        imageVector = MiuixIcons.Refresh,
+                                                        contentDescription = refreshLabel,
+                                                        tint = colors.onSurface,
+                                                    )
+                                                }
+                                            }
+                                        },
+                                    )
+                                },
+                            ) { pageInsets ->
+                                val contentPadding = PaddingValues(
+                                    start = outerInsets.calculateStartPadding(layoutDirection) + 12.dp,
+                                    end = outerInsets.calculateEndPadding(layoutDirection) + 12.dp,
+                                    top = pageInsets.calculateTopPadding() + 8.dp,
+                                    bottom = outerInsets.calculateBottomPadding() + 16.dp,
+                                )
+                                LazyColumn(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .scrollEndHaptic()
+                                        .overScrollVertical()
+                                        .nestedScroll(scrollBehavior.nestedScrollConnection),
+                                    contentPadding = contentPadding,
+                                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                                ) {
+                                    if (pageIndex == 0) {
                                         item {
                                             StatusHeroCard(
                                                 status = status,
@@ -326,6 +420,7 @@ internal fun ManagerApp(
                                             EnvironmentSection(
                                                 status = status,
                                                 xposed = xposed,
+                                                keyboardIcon = keyboardVector,
                                                 actions = actions,
                                                 showMessage = showMessage,
                                             )
@@ -334,8 +429,8 @@ internal fun ManagerApp(
                                             SupportedKeyboardsSection(
                                                 status = status,
                                                 xposed = xposed,
+                                                keyboardIcon = keyboardVector,
                                                 actions = actions,
-                                                onOpenTest = { showTestDialog = true },
                                                 showMessage = showMessage,
                                             )
                                         }
@@ -344,31 +439,18 @@ internal fun ManagerApp(
                                                 HookedProcessesSection(
                                                     status = status,
                                                     targets = xposed.runningTargets,
+                                                    keyboardIcon = keyboardVector,
                                                     actions = actions,
                                                     showMessage = showMessage,
                                                 )
                                             }
                                         }
-                                    }
-                                    1 -> {
+                                    } else {
                                         item {
                                             SettingsSection(
                                                 preferences = preferences,
-                                                backdrop = backdrop,
                                                 actions = actions,
                                                 onOpenTest = { showTestDialog = true },
-                                                showMessage = showMessage,
-                                            )
-                                        }
-                                    }
-                                    else -> {
-                                        item { AboutHeroCard(metadata = metadata, dark = dark) }
-                                        item {
-                                            AboutDetailsSection(
-                                                status = status,
-                                                metadata = metadata,
-                                                xposed = xposed,
-                                                actions = actions,
                                                 showMessage = showMessage,
                                             )
                                         }
@@ -380,11 +462,13 @@ internal fun ManagerApp(
                 }
             }
 
-            AutofillTestDialog(
-                show = showTestDialog,
-                dark = dark,
-                onDismiss = { showTestDialog = false },
-            )
+            if (showTestDialog) {
+                AutofillTestDialog(
+                    show = true,
+                    dark = dark,
+                    onDismiss = { showTestDialog = false },
+                )
+            }
         }
     }
 }
@@ -568,11 +652,11 @@ private fun StatusHeroCard(
 private fun EnvironmentSection(
     status: DeviceStatus,
     xposed: XposedStatus,
+    keyboardIcon: ImageVector,
     actions: ManagerActions,
     showMessage: (String) -> Unit,
 ) {
     val unset = stringResource(R.string.status_not_configured)
-    val keyboardIcon = ImageVector.vectorResource(R.drawable.ic_keyboard)
     val systemScopeLabel = stringResource(R.string.status_scope_system)
     val scopeApprovedMsg = stringResource(R.string.snackbar_scope_approved)
     val scopeFailedPattern = stringResource(R.string.snackbar_scope_failed)
@@ -672,11 +756,10 @@ private fun EnvironmentSection(
 private fun SupportedKeyboardsSection(
     status: DeviceStatus,
     xposed: XposedStatus,
+    keyboardIcon: ImageVector,
     actions: ManagerActions,
-    onOpenTest: () -> Unit,
     showMessage: (String) -> Unit,
 ) {
-    val keyboardIcon = ImageVector.vectorResource(R.drawable.ic_keyboard)
     val scopeApprovedMsg = stringResource(R.string.snackbar_scope_approved)
     val scopeFailedPattern = stringResource(R.string.snackbar_scope_failed)
     val openFailedMsg = stringResource(R.string.snackbar_open_failed)
@@ -737,17 +820,6 @@ private fun SupportedKeyboardsSection(
                 )
             }
         }
-
-        SmallTitle(text = stringResource(R.string.section_tools), insideMargin = SectionTitleMargin)
-        Card(modifier = Modifier.fillMaxWidth(), insideMargin = CardMargin) {
-            ManagerRow(
-                title = stringResource(R.string.tool_autofill_test),
-                summary = stringResource(R.string.tool_autofill_test_summary),
-                icon = MiuixIcons.Lock,
-                showChevron = true,
-                onClick = onOpenTest,
-            )
-        }
     }
 }
 
@@ -755,10 +827,10 @@ private fun SupportedKeyboardsSection(
 private fun HookedProcessesSection(
     status: DeviceStatus,
     targets: List<HookedProcessInfo>,
+    keyboardIcon: ImageVector,
     actions: ManagerActions,
     showMessage: (String) -> Unit,
 ) {
-    val keyboardIcon = ImageVector.vectorResource(R.drawable.ic_keyboard)
     val openFailedMsg = stringResource(R.string.snackbar_open_failed)
 
     Column {
@@ -806,7 +878,6 @@ private fun HookedProcessesSection(
 @Composable
 private fun SettingsSection(
     preferences: UiPreferences,
-    backdrop: Backdrop,
     actions: ManagerActions,
     onOpenTest: () -> Unit,
     showMessage: (String) -> Unit,
@@ -827,7 +898,7 @@ private fun SettingsSection(
                 items = modeOptions,
                 selectedIndex = preferences.themeMode,
                 onSelectedIndexChange = { actions.updateThemeMode(it) },
-                backdrop = backdrop,
+                backdrop = null,
                 insideMargin = RowMargin,
                 startAction = { PackageIcon(null, MiuixIcons.Theme) },
             )
@@ -955,54 +1026,155 @@ private fun AutofillTestDialog(
 }
 
 @Composable
-private fun AboutHeroCard(metadata: AppMetadata, dark: Boolean) {
-    val accent = MiuixTheme.colorScheme.primary
+private fun HyperCeilerAboutPage(
+    outerInsets: PaddingValues,
+    metadata: AppMetadata,
+    xposed: XposedStatus,
+    dark: Boolean,
+    actions: ManagerActions,
+    showMessage: (String) -> Unit,
+) {
     val colors = MiuixTheme.colorScheme
-    val heroColor = accent.copy(alpha = if (dark) 0.16f else 0.10f)
-    val markRes = if (dark) R.drawable.ic_about_mark_dark else R.drawable.ic_launcher_foreground
+    val layoutDirection = LocalLayoutDirection.current
+    val listState = rememberLazyListState()
+    val showCompactTitle by remember(listState) {
+        derivedStateOf {
+            listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 220
+        }
+    }
+    val titleAlpha by animateFloatAsState(
+        targetValue = if (showCompactTitle) 1f else 0f,
+        animationSpec = tween(durationMillis = 180),
+    )
 
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.defaultColors(color = heroColor),
-        insideMargin = CardMargin,
-    ) {
-        Box(
-            modifier = Modifier.fillMaxWidth().heightIn(min = 296.dp),
-            contentAlignment = Alignment.TopCenter,
+    Scaffold(
+        modifier = Modifier.fillMaxSize(),
+        containerColor = Color.Transparent,
+        popupHost = {},
+        topBar = {
+            SmallTopAppBar(
+                title = stringResource(R.string.manager_about),
+                color = if (showCompactTitle) colors.surface else Color.Transparent,
+                titleColor = colors.onSurface.copy(alpha = titleAlpha),
+            )
+        },
+    ) { pageInsets ->
+        val contentPadding = PaddingValues(
+            start = outerInsets.calculateStartPadding(layoutDirection) + 12.dp,
+            end = outerInsets.calculateEndPadding(layoutDirection) + 12.dp,
+            top = pageInsets.calculateTopPadding(),
+            bottom = outerInsets.calculateBottomPadding() + 16.dp,
+        )
+        LazyColumn(
+            state = listState,
+            modifier = Modifier
+                .fillMaxSize()
+                .scrollEndHaptic()
+                .overScrollVertical(),
+            contentPadding = contentPadding,
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Canvas(Modifier.matchParentSize()) {
-                val center = Offset(size.width / 2, 92.dp.toPx())
-                drawCircle(accent.copy(alpha = 0.14f), 67.dp.toPx(), center, style = Stroke(1.dp.toPx()))
-                drawCircle(accent.copy(alpha = 0.09f), 92.dp.toPx(), center, style = Stroke(1.dp.toPx()))
-                drawCircle(accent.copy(alpha = 0.05f), 112.dp.toPx(), center, style = Stroke(1.dp.toPx()))
+            item(key = "about_header") {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 18.dp, bottom = 14.dp, start = 16.dp, end = 16.dp)
+                        .graphicsLayer {
+                            val progress = if (listState.firstVisibleItemIndex > 0) {
+                                1f
+                            } else {
+                                (listState.firstVisibleItemScrollOffset / 340f).coerceIn(0f, 1f)
+                            }
+                            alpha = 1f - progress
+                            val scale = 1f - (progress * 0.08f)
+                            scaleX = scale
+                            scaleY = scale
+                        },
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    val iconShape = RoundedCornerShape(22.dp)
+                    Box(
+                        modifier = Modifier
+                            .size(86.dp)
+                            .clip(iconShape)
+                            .background(Color(0xFFF6F9FE))
+                            .border(
+                                width = 1.dp,
+                                color = if (dark) Color.White.copy(alpha = 0.10f) else Color(0xFFDCE6F5),
+                                shape = iconShape,
+                            ),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Image(
+                            painter = painterResource(R.drawable.ic_launcher_foreground),
+                            contentDescription = null,
+                            modifier = Modifier.size(72.dp),
+                        )
+                    }
+                    Text(
+                        text = stringResource(R.string.module_name),
+                        modifier = Modifier.padding(top = 14.dp),
+                        style = MiuixTheme.textStyles.headline1.copy(fontSize = 27.sp, fontWeight = FontWeight.Bold),
+                        color = colors.onSurface,
+                    )
+                    Box(
+                        modifier = Modifier
+                            .padding(top = 8.dp)
+                            .clip(RoundedCornerShape(50))
+                            .background(colors.primary.copy(alpha = if (dark) 0.18f else 0.10f))
+                            .padding(horizontal = 12.dp, vertical = 4.dp),
+                    ) {
+                        Text(
+                            text = stringResource(R.string.about_version, metadata.versionName, metadata.versionCode),
+                            style = MiuixTheme.textStyles.body2.copy(fontSize = 13.sp, fontWeight = FontWeight.SemiBold),
+                            color = colors.primary,
+                        )
+                    }
+                    Text(
+                        text = stringResource(R.string.about_autofill_description),
+                        modifier = Modifier.widthIn(max = 280.dp).padding(top = 12.dp),
+                        style = MiuixTheme.textStyles.body2,
+                        color = colors.onSurfaceVariantSummary,
+                        textAlign = TextAlign.Center,
+                    )
+                }
             }
-            Column(
-                modifier = Modifier.padding(start = 18.dp, end = 18.dp, top = 24.dp, bottom = 24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Image(
-                    painter = painterResource(markRes),
-                    contentDescription = null,
-                    modifier = Modifier.size(134.dp),
-                )
-                Text(
-                    text = stringResource(R.string.module_name),
-                    style = MiuixTheme.textStyles.headline1.copy(fontSize = 24.sp, fontWeight = FontWeight.Bold),
-                    textAlign = TextAlign.Center,
-                    color = colors.onSurface,
-                )
-                Text(
-                    text = stringResource(R.string.about_version, metadata.versionName, metadata.versionCode),
-                    modifier = Modifier.padding(top = 5.dp),
-                    style = MiuixTheme.textStyles.body2.copy(fontWeight = FontWeight.Medium),
-                    color = colors.onSurfaceVariantSummary,
-                )
-                Text(
-                    text = stringResource(R.string.about_autofill_description),
-                    modifier = Modifier.widthIn(max = 286.dp).padding(top = 18.dp),
-                    style = MiuixTheme.textStyles.body2,
-                    color = colors.onSurfaceVariantSummary,
-                    textAlign = TextAlign.Center,
+
+            item(key = "about_bento") {
+                val apiValue = if (xposed.active) {
+                    "API ${xposed.apiVersion}"
+                } else {
+                    stringResource(R.string.about_xposed_api_default)
+                }
+                val apiSub = if (xposed.active) {
+                    "${xposed.frameworkName} ${xposed.frameworkVersion}"
+                } else {
+                    stringResource(R.string.about_xposed_api_sub)
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    BentoInfoCard(
+                        label = stringResource(R.string.about_xposed_api),
+                        value = apiValue,
+                        sub = apiSub,
+                        modifier = Modifier.weight(1f),
+                    )
+                    BentoInfoCard(
+                        label = stringResource(R.string.about_requirement),
+                        value = stringResource(R.string.about_requirement_value),
+                        sub = stringResource(R.string.about_requirement_sub),
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+
+            item(key = "about_details") {
+                AboutCardsColumn(
+                    metadata = metadata,
+                    actions = actions,
+                    showMessage = showMessage,
                 )
             }
         }
@@ -1010,61 +1182,95 @@ private fun AboutHeroCard(metadata: AppMetadata, dark: Boolean) {
 }
 
 @Composable
-private fun AboutDetailsSection(
-    status: DeviceStatus,
+private fun BentoInfoCard(
+    label: String,
+    value: String,
+    sub: String,
+    modifier: Modifier = Modifier,
+) {
+    val colors = MiuixTheme.colorScheme
+    Card(modifier = modifier, insideMargin = PaddingValues(16.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                text = label,
+                style = MiuixTheme.textStyles.body2.copy(fontSize = 13.sp),
+                color = colors.onSurfaceVariantSummary,
+            )
+            Text(
+                text = value,
+                modifier = Modifier.padding(top = 2.dp),
+                style = MiuixTheme.textStyles.headline1.copy(fontSize = 20.sp, fontWeight = FontWeight.Bold),
+                color = colors.onSurface,
+            )
+            Text(
+                text = sub,
+                style = MiuixTheme.textStyles.body2.copy(fontSize = 12.sp),
+                color = colors.onSurfaceVariantSummary,
+            )
+        }
+    }
+}
+
+@Composable
+private fun AboutCardsColumn(
     metadata: AppMetadata,
-    xposed: XposedStatus,
     actions: ManagerActions,
     showMessage: (String) -> Unit,
 ) {
     val context = LocalContext.current
+    val colors = MiuixTheme.colorScheme
     val copyLabel = stringResource(R.string.about_copy_package)
     val packageLabel = stringResource(R.string.about_package)
     val copiedMsg = stringResource(R.string.snackbar_package_copied)
     val openFailedMsg = stringResource(R.string.snackbar_open_failed)
-    val apiSummary = if (xposed.active) {
-        stringResource(R.string.status_framework_meta, xposed.frameworkName, xposed.frameworkVersion, xposed.apiVersion)
-    } else {
-        stringResource(R.string.about_xposed_api_default)
-    }
-    val supportedSummary = remember(status.keyboards) {
-        status.keyboards.joinToString(" · ") { it.app.label }
-    }
 
     Column {
         SmallTitle(text = stringResource(R.string.section_links), insideMargin = SectionTitleMargin)
         Card(modifier = Modifier.fillMaxWidth(), insideMargin = CardMargin) {
-            ManagerRow(
-                title = stringResource(R.string.about_coolapk),
-                summary = stringResource(R.string.about_coolapk_value),
-                icon = MiuixIcons.Contacts,
-                showChevron = true,
-                onClick = {
-                    if (!actions.openUrl(COOLAPK_URL)) {
-                        showMessage(openFailedMsg)
+            BasicComponent(
+                title = stringResource(R.string.about_author_name),
+                summary = stringResource(R.string.about_coolapk_summary),
+                insideMargin = RowMargin,
+                startAction = {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(colors.primary.copy(alpha = 0.14f)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = MiuixIcons.Contacts,
+                            contentDescription = null,
+                            modifier = Modifier.size(22.dp),
+                            tint = colors.primary,
+                        )
                     }
                 },
-            )
-            ManagerRow(
-                title = stringResource(R.string.about_github),
-                summary = stringResource(R.string.about_github_value),
-                icon = MiuixIcons.Link,
-                showChevron = true,
+                endActions = {
+                    Icon(
+                        imageVector = MiuixIcons.Basic.ArrowRight,
+                        contentDescription = null,
+                        modifier = Modifier.size(15.dp),
+                        tint = colors.onSurfaceVariantSummary,
+                    )
+                },
                 onClick = {
-                    if (!actions.openUrl(GITHUB_URL)) {
-                        showMessage(openFailedMsg)
-                    }
+                    if (!actions.openUrl(COOLAPK_URL)) showMessage(openFailedMsg)
+                },
+            )
+            ActionValueRow(
+                title = stringResource(R.string.about_github),
+                value = stringResource(R.string.about_github_action),
+                icon = MiuixIcons.Link,
+                onClick = {
+                    if (!actions.openUrl(GITHUB_URL)) showMessage(openFailedMsg)
                 },
             )
         }
 
         SmallTitle(text = stringResource(R.string.about_details), insideMargin = SectionTitleMargin)
         Card(modifier = Modifier.fillMaxWidth(), insideMargin = CardMargin) {
-            ManagerRow(
-                title = stringResource(R.string.about_xposed_api),
-                summary = apiSummary,
-                icon = MiuixIcons.Layers,
-            )
             BasicComponent(
                 title = packageLabel,
                 summary = metadata.packageName,
@@ -1075,7 +1281,7 @@ private fun AboutDetailsSection(
                         imageVector = MiuixIcons.Copy,
                         contentDescription = copyLabel,
                         modifier = Modifier.size(20.dp),
-                        tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                        tint = colors.onSurfaceVariantSummary,
                     )
                 },
                 onClickLabel = copyLabel,
@@ -1086,24 +1292,17 @@ private fun AboutDetailsSection(
                 },
             )
             ManagerRow(
-                title = stringResource(R.string.about_targets),
-                summary = supportedSummary,
-                icon = ImageVector.vectorResource(R.drawable.ic_keyboard),
-            )
-            ManagerRow(
                 title = stringResource(R.string.about_providers),
                 summary = stringResource(R.string.about_providers_summary),
                 icon = MiuixIcons.Lock,
             )
-            ManagerRow(
-                title = stringResource(R.string.about_requirement),
-                summary = stringResource(R.string.about_requirement_summary),
-                icon = MiuixIcons.Settings,
-            )
-            ManagerRow(
+            ActionValueRow(
                 title = stringResource(R.string.about_license),
-                summary = stringResource(R.string.about_license_value),
+                value = stringResource(R.string.about_license_value),
                 icon = MiuixIcons.Notes,
+                onClick = {
+                    if (!actions.openUrl(LICENSE_URL)) showMessage(openFailedMsg)
+                },
             )
         }
 
@@ -1112,18 +1311,16 @@ private fun AboutDetailsSection(
             ManagerRow(
                 title = stringResource(R.string.about_credit_lsposed),
                 summary = stringResource(R.string.about_credit_lsposed_summary),
-                icon = MiuixIcons.Link,
+                icon = MiuixIcons.Layers,
                 showChevron = true,
                 onClick = {
-                    if (!actions.openUrl("https://github.com/libxposed")) {
-                        showMessage(openFailedMsg)
-                    }
+                    if (!actions.openUrl("https://github.com/libxposed")) showMessage(openFailedMsg)
                 },
             )
             ManagerRow(
                 title = stringResource(R.string.about_credit_miuix),
                 summary = stringResource(R.string.about_credit_miuix_summary),
-                icon = MiuixIcons.Link,
+                icon = MiuixIcons.Theme,
                 showChevron = true,
                 onClick = {
                     if (!actions.openUrl("https://github.com/miuix-kotlin-multiplatform/miuix")) {
@@ -1133,6 +1330,36 @@ private fun AboutDetailsSection(
             )
         }
     }
+}
+
+@Composable
+private fun ActionValueRow(
+    title: String,
+    value: String,
+    icon: ImageVector,
+    onClick: () -> Unit,
+) {
+    val colors = MiuixTheme.colorScheme
+    BasicComponent(
+        title = title,
+        insideMargin = RowMargin,
+        startAction = { PackageIcon(null, icon) },
+        endActions = {
+            Text(
+                text = value,
+                style = MiuixTheme.textStyles.body2,
+                color = colors.onSurfaceVariantActions,
+                modifier = Modifier.padding(end = 6.dp),
+            )
+            Icon(
+                imageVector = MiuixIcons.Basic.ArrowRight,
+                contentDescription = null,
+                modifier = Modifier.size(15.dp),
+                tint = colors.onSurfaceVariantSummary,
+            )
+        },
+        onClick = onClick,
+    )
 }
 
 @Composable
@@ -1190,15 +1417,7 @@ private fun ManagerRow(
 private fun PackageIcon(packageName: String?, fallback: ImageVector) {
     val context = LocalContext.current
     val bitmap = remember(context, packageName) {
-        if (packageName == null) {
-            null
-        } else {
-            try {
-                context.packageManager.getApplicationIcon(packageName).toBitmap(96, 96).asImageBitmap()
-            } catch (_: PackageManager.NameNotFoundException) {
-                null
-            }
-        }
+        AppIconCache.get(context.packageManager, packageName)
     }
     if (bitmap != null) {
         Image(bitmap, contentDescription = null, modifier = Modifier.size(26.dp))
