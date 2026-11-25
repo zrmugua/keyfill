@@ -3,6 +3,7 @@ package com.mugua.keyfill;
 import android.inputmethodservice.InputMethodService;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.View;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InlineSuggestionsRequest;
 import android.view.inputmethod.InlineSuggestionsResponse;
@@ -69,6 +70,9 @@ public final class AutofillModule extends XposedModule {
         }
         try {
             hookKeyboard();
+            if (target == KeyboardTarget.BAIDU) {
+                BaiduToolbar.installHooks(this, param.getClassLoader());
+            }
             log("Keyboard inline hooks ready for " + target.packageName);
         } catch (ReflectiveOperationException | RuntimeException | LinkageError failure) {
             log("Keyboard hooks unavailable: " + failure.getClass().getSimpleName());
@@ -125,6 +129,14 @@ public final class AutofillModule extends XposedModule {
                     Object result = chain.proceed();
                     if (keyboardUi != null) {
                         keyboardUi.onKeyboardShown();
+                    }
+                    return result;
+                });
+        hook(serviceClass.getMethod("setInputView", View.class))
+                .intercept(chain -> {
+                    Object result = chain.proceed();
+                    if (keyboardUi != null) {
+                        keyboardUi.onInputViewReplaced();
                     }
                     return result;
                 });

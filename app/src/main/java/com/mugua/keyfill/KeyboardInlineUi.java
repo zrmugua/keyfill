@@ -5,6 +5,7 @@ import android.app.Dialog;
 import android.content.Context;
 import android.content.res.ColorStateList;
 import android.content.res.Configuration;
+import android.content.res.Resources;
 import android.graphics.Color;
 import android.graphics.Rect;
 import android.graphics.Typeface;
@@ -66,13 +67,17 @@ final class KeyboardInlineUi {
     }
 
     InlineSuggestionsRequest createRequest() {
-        Bundle styles = UiVersions.newStylesBuilder().addStyle(suggestionStyle(isDarkTheme())).build();
-        styles.putBundle(InlineThemeRenderer.LIGHT_STYLE,
-                UiVersions.newStylesBuilder().addStyle(suggestionStyle(false)).build());
-        styles.putBundle(InlineThemeRenderer.DARK_STYLE,
-                UiVersions.newStylesBuilder().addStyle(suggestionStyle(true)).build());
+        boolean systemDark = isNightMode(Resources.getSystem().getConfiguration());
+        boolean imeDark = isDarkTheme();
+        Bundle styles = UiVersions.newStylesBuilder().addStyle(suggestionStyle(imeDark)).build();
+        if (imeDark == systemDark) {
+            styles.putBundle(InlineThemeRenderer.LIGHT_STYLE,
+                    UiVersions.newStylesBuilder().addStyle(suggestionStyle(false)).build());
+            styles.putBundle(InlineThemeRenderer.DARK_STYLE,
+                    UiVersions.newStylesBuilder().addStyle(suggestionStyle(true)).build());
+        }
         InlinePresentationSpec card = new InlinePresentationSpec.Builder(
-                new Size(dp(32), dp(28)), new Size(dp(360), dp(CARD_HEIGHT_DP)))
+                new Size(dp(32), dp(26)), new Size(dp(360), dp(CARD_HEIGHT_DP)))
                 .setStyle(styles)
                 .build();
         AutofillModule.log("Inline request created");
@@ -124,6 +129,13 @@ final class KeyboardInlineUi {
         showWhenLaidOut();
     }
 
+    void onInputViewReplaced() {
+        if (strip != null && !strip.isAttachedToWindow()) {
+            strip = null;
+        }
+        showWhenLaidOut();
+    }
+
     void onKeyboardHidden() {
         clear();
     }
@@ -142,7 +154,7 @@ final class KeyboardInlineUi {
             return;
         }
         int version = responseVersion;
-        main.post(() -> tryRender(version, 10));
+        main.post(() -> tryRender(version, 20));
     }
 
     private void tryRender(int version, int attempts) {
@@ -175,6 +187,10 @@ final class KeyboardInlineUi {
         int version = responseVersion;
         Context context = candidate.getContext();
         boolean dark = isDarkTheme();
+        if (target != KeyboardTarget.WETYPE && target != KeyboardTarget.XIAO_AI) {
+            renderImeToolbar(candidate, suggestions, version, dark);
+            return;
+        }
         boolean weType = target == KeyboardTarget.WETYPE;
         XiaoAiToolbar xiaoAi = weType ? null : XiaoAiToolbar.bind(service, candidate);
         if (!weType && xiaoAi == null) {
@@ -307,9 +323,85 @@ final class KeyboardInlineUi {
         return dark ? 0xff18191b : 0xffe5e6e7;
     }
 
+    private void renderImeToolbar(ViewGroup candidate, List<InlineSuggestion> suggestions,
+            int version, boolean dark) {
+        ImeToolbar toolbar = switch (target) {
+            case SOGOU -> SogouToolbar.bind(candidate, dark);
+            case BAIDU -> BaiduToolbar.bind(service, candidate, dark);
+            case IFLYTEK -> IflytekToolbar.bind(service, candidate, dark);
+            case DOUBAO -> DoubaoToolbar.bind(candidate, dark);
+            default -> null;
+        };
+        if (toolbar == null) {
+            return;
+        }
+        Context context = candidate.getContext();
+        boolean hasPinned = suggestions.stream().anyMatch(s -> s.getInfo().isPinned());
+        int cardCount = suggestions.size() - (hasPinned ? 1 : 0);
+        boolean singleCard = cardCount == 1;
+        LinearLayout bar = toolbar.bar();
+
+        LinearLayout cards = new LinearLayout(context);
+        cards.setGravity(singleCard ? Gravity.CENTER : Gravity.CENTER_VERTICAL);
+        SuggestionScroller scroller = new SuggestionScroller(context, cards);
+        bar.addView(scroller, new LinearLayout.LayoutParams(0, MATCH_PARENT, 1));
+
+        LinearLayout pinned = new LinearLayout(context);
+        pinned.setGravity(Gravity.CENTER_VERTICAL);
+        bar.addView(pinned, new LinearLayout.LayoutParams(WRAP_CONTENT, MATCH_PARENT));
+
+        int cardHeight = toolbar.cardHeight();
+        int availableWidth = toolbar.availableWidth(hasPinned, dp(PINNED_GAP_DP));
+        for (InlineSuggestion suggestion : suggestions) {
+            boolean isPinned = suggestion.getInfo().isPinned() && pinned.getChildCount() == 0;
+            ViewGroup destination = isPinned ? pinned : cards;
+            SuggestionSlot slot = new SuggestionSlot(context);
+            slot.setBackground(toolbar.cardBackground(isPinned, dark));
+            slot.setVisibility(View.GONE);
+            int width = isPinned ? cardHeight : WRAP_CONTENT;
+            LinearLayout.LayoutParams spacing = new LinearLayout.LayoutParams(width, cardHeight);
+            if (isPinned) {
+                spacing.setMarginStart(dp(PINNED_GAP_DP));
+            } else if (!singleCard) {
+                spacing.setMarginEnd(dp(7));
+            }
+            destination.addView(slot, spacing);
+            int renderWidth = WRAP_CONTENT;
+            if (singleCard && !isPinned) {
+                InlinePresentationSpec spec = suggestion.getInfo().getInlinePresentationSpec();
+                if (availableWidth >= spec.getMinSize().getWidth()) {
+                    renderWidth = Math.min(availableWidth, spec.getMaxSize().getWidth());
+                }
+            }
+            try {
+                suggestion.inflate(context, new Size(renderWidth, WRAP_CONTENT),
+                        service.getMainExecutor(), card -> {
+                            if (version != responseVersion || card == null
+                                    || !candidate.isShown() || !candidate.isAttachedToWindow()) {
+                                return;
+                            }
+                            ViewGroup.LayoutParams size = card.getLayoutParams();
+                            if (!isPinned) {
+                                scroller.clipSurface(card);
+                            }
+                            slot.addView(card, new FrameLayout.LayoutParams(size.width, size.height,
+                                    Gravity.CENTER));
+                            slot.setVisibility(View.VISIBLE);
+                            if (strip == null) {
+                                strip = toolbar.attach(candidate);
+                                AutofillModule.log("Inline card attached in " + target.packageName);
+                            }
+                        });
+            } catch (IllegalArgumentException | IllegalStateException failure) {
+                AutofillModule.log("Inline card could not be rendered");
+            }
+        }
+    }
+
     private ViewGroup findCandidate(View view) {
         if (view instanceof ViewGroup group) {
-            if (target.containerClass.equals(group.getClass().getName())) {
+            if (target.containerClass.equals(group.getClass().getName())
+                    && group.isShown() && group.getWidth() > 0 && group.getHeight() > 0) {
                 return group;
             }
             for (int i = 0; i < group.getChildCount(); i++) {
@@ -392,8 +484,17 @@ final class KeyboardInlineUi {
     }
 
     private boolean isDarkTheme() {
-        return (service.getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK)
-                == Configuration.UI_MODE_NIGHT_YES;
+        return switch (target) {
+            case SOGOU -> SogouToolbar.isDark(service);
+            case BAIDU -> BaiduToolbar.isDark(service);
+            case IFLYTEK -> IflytekToolbar.isDark(service);
+            case DOUBAO -> DoubaoToolbar.isDark(service);
+            default -> isNightMode(service.getResources().getConfiguration());
+        };
+    }
+
+    private static boolean isNightMode(Configuration configuration) {
+        return (configuration.uiMode & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
     }
 
     private int dp(int dp) {
@@ -498,6 +599,7 @@ final class KeyboardInlineUi {
         private final int[] location = new int[2];
         private final Rect viewport = new Rect();
         private final Rect appliedViewport = new Rect();
+        private boolean appliedVisible;
         private SurfaceControl clipLayer;
         private final ViewTreeObserver.OnPreDrawListener updateClip = () -> {
             updateClipLayer();
@@ -533,6 +635,12 @@ final class KeyboardInlineUi {
         }
 
         @Override
+        public void onVisibilityAggregated(boolean isVisible) {
+            super.onVisibilityAggregated(isVisible);
+            updateClipLayer();
+        }
+
+        @Override
         protected void onDetachedFromWindow() {
             getViewTreeObserver().removeOnPreDrawListener(updateClip);
             if (clipLayer != null) {
@@ -542,6 +650,7 @@ final class KeyboardInlineUi {
                     clipLayer.release();
                     clipLayer = null;
                     appliedViewport.setEmpty();
+                    appliedVisible = false;
                 }
             }
             super.onDetachedFromWindow();
@@ -561,11 +670,13 @@ final class KeyboardInlineUi {
                     }
                     clipLayer = layer;
                     updateViewport();
+                    boolean visible = shouldShowSurface();
                     // Keep the parent layer at the window origin so Android can position each card.
                     transaction.setLayer(layer, 1).setCrop(layer, viewport)
-                            .setVisibility(layer, !viewport.isEmpty()).reparent(surface, layer);
+                            .setVisibility(layer, visible).reparent(surface, layer);
                     root.applyTransactionOnDraw(transaction);
                     appliedViewport.set(viewport);
+                    appliedVisible = visible;
                 }
             } else {
                 try (SurfaceControl.Transaction transaction = new SurfaceControl.Transaction()) {
@@ -581,13 +692,19 @@ final class KeyboardInlineUi {
                 return;
             }
             updateViewport();
-            if (!viewport.equals(appliedViewport)) {
+            boolean visible = shouldShowSurface();
+            if (!viewport.equals(appliedViewport) || visible != appliedVisible) {
                 try (SurfaceControl.Transaction transaction = new SurfaceControl.Transaction()) {
                     root.applyTransactionOnDraw(transaction.setCrop(clipLayer, viewport)
-                            .setVisibility(clipLayer, !viewport.isEmpty()));
+                            .setVisibility(clipLayer, visible));
                 }
                 appliedViewport.set(viewport);
+                appliedVisible = visible;
             }
+        }
+
+        private boolean shouldShowSurface() {
+            return isShown() && !viewport.isEmpty();
         }
 
         private void updateViewport() {

@@ -36,6 +36,10 @@
     <string name="ime_supported">已适配输入法</string>
     <string name="ime_wechat">微信输入法</string>
     <string name="ime_xiaoai">超级小爱输入法</string>
+    <string name="ime_sogou">搜狗输入法</string>
+    <string name="ime_baidu">百度输入法</string>
+    <string name="ime_iflytek">讯飞输入法</string>
+    <string name="ime_doubao">豆包输入法</string>
     <string name="ime_generic">系统输入法</string>
     <string name="ime_current">正在使用</string>
     <string name="ime_installed">已安装</string>
