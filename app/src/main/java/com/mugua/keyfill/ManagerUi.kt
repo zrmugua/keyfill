@@ -4,11 +4,18 @@ import android.app.Activity
 import android.content.ClipData
 import android.content.ClipboardManager
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -74,6 +81,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
@@ -99,6 +107,7 @@ import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
+import top.yukonga.miuix.kmp.basic.ColorPalette
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
@@ -284,11 +293,15 @@ internal fun ManagerApp(
         preferences.themeMode == 2 -> ColorSchemeMode.Dark
         else -> ColorSchemeMode.System
     }
-    val themeController = remember(schemeMode, systemDark) {
+    val keyColorObj = preferences.keyColor
+        .takeIf { preferences.monetEnabled && it != 0 }
+        ?.let { Color(it or -0x1000000) }
+    val themeController = remember(schemeMode, dark, keyColorObj) {
         ThemeController(
             colorSchemeMode = schemeMode,
             lightColors = lightColorScheme(primary = Color(0xFF1B5EF2)),
             darkColors = darkColorScheme(primary = Color(0xFF6DA8FF)),
+            keyColor = keyColorObj,
             isDark = dark,
         )
     }
@@ -911,6 +924,26 @@ private fun HookedProcessesSection(
     }
 }
 
+private data class KeyColorPreset(val labelRes: Int, val color: Int)
+
+private val KeyColorPresets = listOf(
+    KeyColorPreset(R.string.color_red, 0xFFF44336.toInt()),
+    KeyColorPreset(R.string.color_pink, 0xFFE91E63.toInt()),
+    KeyColorPreset(R.string.color_purple, 0xFF9C27B0.toInt()),
+    KeyColorPreset(R.string.color_deep_purple, 0xFF673AB7.toInt()),
+    KeyColorPreset(R.string.color_indigo, 0xFF3F51B5.toInt()),
+    KeyColorPreset(R.string.color_blue, 0xFF2196F3.toInt()),
+    KeyColorPreset(R.string.color_cyan, 0xFF00BCD4.toInt()),
+    KeyColorPreset(R.string.color_teal, 0xFF009688.toInt()),
+    KeyColorPreset(R.string.color_green, 0xFF4FAF50.toInt()),
+    KeyColorPreset(R.string.color_yellow, 0xFFFFEB3B.toInt()),
+    KeyColorPreset(R.string.color_amber, 0xFFFFC107.toInt()),
+    KeyColorPreset(R.string.color_orange, 0xFFFF9800.toInt()),
+    KeyColorPreset(R.string.color_brown, 0xFF795548.toInt()),
+    KeyColorPreset(R.string.color_blue_grey, 0xFF607D8F.toInt()),
+    KeyColorPreset(R.string.color_sakura, 0xFFFF9CA8.toInt()),
+)
+
 @Composable
 private fun SettingsSection(
     preferences: UiPreferences,
@@ -919,11 +952,32 @@ private fun SettingsSection(
     onOpenTest: () -> Unit,
     showMessage: (String) -> Unit,
 ) {
+    val colors = MiuixTheme.colorScheme
     val modeOptions = listOf(
         stringResource(R.string.pref_theme_system),
         stringResource(R.string.pref_theme_light),
         stringResource(R.string.pref_theme_dark),
     )
+    var showColorDialog by rememberSaveable { mutableStateOf(false) }
+    val activeColor = preferences.keyColor
+    val presetIndex = KeyColorPresets.indexOfFirst { it.color == activeColor }
+    val isCustomColor = activeColor != 0 && presetIndex < 0
+    val customLabel = if (isCustomColor) {
+        stringResource(R.string.pref_key_color_custom_hex, String.format("#%06X", activeColor and 0xFFFFFF))
+    } else {
+        stringResource(R.string.pref_key_color_custom)
+    }
+    val keyColorOptions = buildList {
+        add(stringResource(R.string.pref_key_color_default))
+        KeyColorPresets.forEach { add(stringResource(it.labelRes)) }
+        add(customLabel)
+    }
+    val selectedColorIndex = when {
+        activeColor == 0 -> 0
+        presetIndex >= 0 -> presetIndex + 1
+        else -> keyColorOptions.lastIndex
+    }
+    val swatchColor = if (activeColor != 0) Color(activeColor or -0x1000000) else colors.primary
     val iconHiddenMsg = stringResource(R.string.snackbar_icon_hidden)
     val iconShownMsg = stringResource(R.string.snackbar_icon_shown)
 
@@ -946,6 +1000,43 @@ private fun SettingsSection(
                 checked = preferences.monetEnabled,
                 onCheckedChange = { actions.updateMonet(it) },
             )
+            AnimatedVisibility(
+                visible = preferences.monetEnabled,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut(),
+            ) {
+                GlassDropdownPreference(
+                    title = stringResource(R.string.pref_key_color),
+                    items = keyColorOptions,
+                    selectedIndex = selectedColorIndex,
+                    onSelectedIndexChange = { idx ->
+                        when (idx) {
+                            0 -> actions.updateKeyColor(0)
+                            keyColorOptions.lastIndex -> showColorDialog = true
+                            else -> actions.updateKeyColor(KeyColorPresets[idx - 1].color)
+                        }
+                    },
+                    backdrop = backdrop,
+                    insideMargin = RowMargin,
+                    startAction = {
+                        Box(
+                            modifier = Modifier
+                                .size(26.dp)
+                                .clip(CircleShape)
+                                .clickable(enabled = isCustomColor) { showColorDialog = true },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(20.dp)
+                                    .clip(CircleShape)
+                                    .background(swatchColor)
+                                    .border(1.dp, colors.onSurface.copy(alpha = 0.16f), CircleShape),
+                            )
+                        }
+                    },
+                )
+            }
         }
 
         SmallTitle(text = stringResource(R.string.section_tools), insideMargin = SectionTitleMargin)
@@ -967,6 +1058,77 @@ private fun SettingsSection(
                 showChevron = true,
                 onClick = onOpenTest,
             )
+        }
+    }
+
+    KeyColorPickerDialog(
+        show = showColorDialog,
+        initialColor = swatchColor,
+        backdrop = backdrop,
+        onDismiss = { showColorDialog = false },
+        onConfirm = { picked ->
+            actions.updateKeyColor(picked.toArgb())
+            showColorDialog = false
+        },
+    )
+}
+
+@Composable
+private fun KeyColorPickerDialog(
+    show: Boolean,
+    initialColor: Color,
+    backdrop: Backdrop?,
+    onDismiss: () -> Unit,
+    onConfirm: (Color) -> Unit,
+) {
+    var draftColor by remember(show, initialColor) {
+        mutableStateOf(initialColor.copy(alpha = 1f))
+    }
+    val hexText = remember(draftColor) {
+        String.format("#%06X", draftColor.toArgb() and 0xFFFFFF)
+    }
+
+    GlassDialog(
+        show = show,
+        onDismissRequest = onDismiss,
+        backdrop = backdrop,
+        title = stringResource(R.string.key_color_dialog_title),
+        summary = hexText,
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            ColorPalette(
+                color = draftColor,
+                onColorChanged = { draftColor = it.copy(alpha = 1f) },
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                GlassDialogButton(
+                    onClick = onDismiss,
+                    role = GlassDialogButtonRole.Normal,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text(
+                        text = stringResource(R.string.action_cancel),
+                        style = MiuixTheme.textStyles.body1.copy(fontWeight = FontWeight.Medium),
+                    )
+                }
+                GlassDialogButton(
+                    onClick = { onConfirm(draftColor) },
+                    role = GlassDialogButtonRole.Primary,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text(
+                        text = stringResource(R.string.action_confirm),
+                        style = MiuixTheme.textStyles.body1.copy(fontWeight = FontWeight.Medium),
+                    )
+                }
+            }
         }
     }
 }

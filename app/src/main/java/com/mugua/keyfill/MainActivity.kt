@@ -61,6 +61,7 @@ internal data class AppMetadata(
 internal data class UiPreferences(
     val themeMode: Int = 0, // 0: System, 1: Light, 2: Dark
     val monetEnabled: Boolean = false,
+    val keyColor: Int = 0, // 0: System wallpaper, non-zero: ARGB seed color
     val launcherIconHidden: Boolean = false,
 )
 
@@ -83,6 +84,7 @@ internal interface ManagerActions {
     fun openUrl(url: String): Boolean
     fun updateThemeMode(mode: Int)
     fun updateMonet(enabled: Boolean)
+    fun updateKeyColor(color: Int)
     fun updateLauncherIconHidden(hidden: Boolean)
 }
 
@@ -217,6 +219,12 @@ class MainActivity : ComponentActivity(), ManagerActions {
         uiPrefs = uiPrefs.copy(monetEnabled = enabled)
     }
 
+    override fun updateKeyColor(color: Int) {
+        val normalized = if (color == 0) 0 else (color or -0x1000000)
+        prefs.edit().putInt(KEY_COLOR, normalized).apply()
+        uiPrefs = uiPrefs.copy(keyColor = normalized)
+    }
+
     override fun updateLauncherIconHidden(hidden: Boolean) {
         val state = if (hidden) {
             PackageManager.COMPONENT_ENABLED_STATE_DISABLED
@@ -230,9 +238,11 @@ class MainActivity : ComponentActivity(), ManagerActions {
     private fun readPreferences(): UiPreferences {
         val componentState = packageManager.getComponentEnabledSetting(launcherAlias)
         val hidden = componentState == PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+        val rawColor = prefs.getInt(KEY_COLOR, 0)
         return UiPreferences(
             themeMode = prefs.getInt(KEY_THEME_MODE, 0).coerceIn(0, 2),
             monetEnabled = prefs.getBoolean(KEY_MONET, false),
+            keyColor = if (rawColor == 0) 0 else (rawColor or -0x1000000),
             launcherIconHidden = hidden,
         )
     }
@@ -305,5 +315,6 @@ class MainActivity : ComponentActivity(), ManagerActions {
     private companion object {
         const val KEY_THEME_MODE = "theme_mode"
         const val KEY_MONET = "monet_enabled"
+        const val KEY_COLOR = "key_color"
     }
 }
