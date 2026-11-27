@@ -136,6 +136,7 @@ import top.yukonga.miuix.kmp.glass.GlassTextField
 import top.yukonga.miuix.kmp.glass.GlassTopAppBar
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.basic.ArrowRight
+import top.yukonga.miuix.kmp.icon.extended.Background
 import top.yukonga.miuix.kmp.icon.extended.Clear
 import top.yukonga.miuix.kmp.icon.extended.Contacts
 import top.yukonga.miuix.kmp.icon.extended.Copy
@@ -331,7 +332,7 @@ internal fun ManagerApp(
         val tabs = remember(homeLabel, settingsLabel, aboutLabel) {
             listOf(
                 GlassNavigationItem(icon = MiuixIcons.Home, label = homeLabel),
-                GlassNavigationItem(icon = MiuixIcons.Tune, label = settingsLabel),
+                GlassNavigationItem(icon = MiuixIcons.Settings, label = settingsLabel),
                 GlassNavigationItem(icon = MiuixIcons.Info, label = aboutLabel),
             )
         }
@@ -496,6 +497,7 @@ internal fun ManagerApp(
                                                 SettingsSection(
                                                     preferences = preferences,
                                                     backdrop = backdrop,
+                                                    keyboardIcon = keyboardVector,
                                                     actions = actions,
                                                     onOpenTest = { showTestDialog = true },
                                                     showMessage = showMessage,
@@ -752,7 +754,7 @@ private fun EnvironmentSection(
             ManagerRow(
                 title = stringResource(R.string.status_scope),
                 summary = scopeSummary,
-                icon = MiuixIcons.Settings,
+                icon = MiuixIcons.Tune,
                 showChevron = xposed.active && missingScopes.isNotEmpty(),
                 onClick = if (!xposed.active) {
                     {
@@ -948,6 +950,7 @@ private val KeyColorPresets = listOf(
 private fun SettingsSection(
     preferences: UiPreferences,
     backdrop: Backdrop,
+    keyboardIcon: ImageVector,
     actions: ManagerActions,
     onOpenTest: () -> Unit,
     showMessage: (String) -> Unit,
@@ -981,83 +984,93 @@ private fun SettingsSection(
     val iconHiddenMsg = stringResource(R.string.snackbar_icon_hidden)
     val iconShownMsg = stringResource(R.string.snackbar_icon_shown)
 
-    Column {
-        SmallTitle(text = stringResource(R.string.section_appearance), insideMargin = SectionTitleMargin)
-        Card(modifier = Modifier.fillMaxWidth(), cornerRadius = 20.dp, insideMargin = CardMargin) {
-            GlassDropdownPreference(
-                title = stringResource(R.string.pref_theme_mode),
-                items = modeOptions,
-                selectedIndex = preferences.themeMode,
-                onSelectedIndexChange = { actions.updateThemeMode(it) },
-                backdrop = backdrop,
-                insideMargin = RowMargin,
-                startAction = { PackageIcon(null, MiuixIcons.Theme) },
-            )
-            SwitchRow(
-                title = stringResource(R.string.pref_monet),
-                summary = stringResource(R.string.pref_monet_summary),
-                icon = MiuixIcons.Tune,
-                checked = preferences.monetEnabled,
-                onCheckedChange = { actions.updateMonet(it) },
-            )
-            AnimatedVisibility(
-                visible = preferences.monetEnabled,
-                enter = expandVertically() + fadeIn(),
-                exit = shrinkVertically() + fadeOut(),
-            ) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column {
+            SmallTitle(text = stringResource(R.string.section_appearance), insideMargin = SectionTitleMargin)
+            Card(modifier = Modifier.fillMaxWidth(), cornerRadius = 20.dp, insideMargin = CardMargin) {
                 GlassDropdownPreference(
-                    title = stringResource(R.string.pref_key_color),
-                    items = keyColorOptions,
-                    selectedIndex = selectedColorIndex,
-                    onSelectedIndexChange = { idx ->
-                        when (idx) {
-                            0 -> actions.updateKeyColor(0)
-                            keyColorOptions.lastIndex -> showColorDialog = true
-                            else -> actions.updateKeyColor(KeyColorPresets[idx - 1].color)
-                        }
-                    },
+                    title = stringResource(R.string.pref_theme_mode),
+                    items = modeOptions,
+                    selectedIndex = preferences.themeMode,
+                    onSelectedIndexChange = { actions.updateThemeMode(it) },
                     backdrop = backdrop,
                     insideMargin = RowMargin,
-                    startAction = {
-                        Box(
-                            modifier = Modifier
-                                .size(26.dp)
-                                .clip(CircleShape)
-                                .clickable(enabled = isCustomColor) { showColorDialog = true },
-                            contentAlignment = Alignment.Center,
-                        ) {
+                    startAction = { PackageIcon(null, MiuixIcons.Theme) },
+                )
+                SwitchRow(
+                    title = stringResource(R.string.pref_monet),
+                    summary = stringResource(R.string.pref_monet_summary),
+                    icon = MiuixIcons.Background,
+                    checked = preferences.monetEnabled,
+                    onCheckedChange = { actions.updateMonet(it) },
+                )
+                AnimatedVisibility(
+                    visible = preferences.monetEnabled,
+                    enter = expandVertically() + fadeIn(),
+                    exit = shrinkVertically() + fadeOut(),
+                ) {
+                    GlassDropdownPreference(
+                        title = stringResource(R.string.pref_key_color),
+                        items = keyColorOptions,
+                        selectedIndex = selectedColorIndex,
+                        onSelectedIndexChange = { idx ->
+                            when (idx) {
+                                0 -> actions.updateKeyColor(0)
+                                keyColorOptions.lastIndex -> showColorDialog = true
+                                else -> actions.updateKeyColor(KeyColorPresets[idx - 1].color)
+                            }
+                        },
+                        backdrop = backdrop,
+                        insideMargin = RowMargin,
+                        startAction = {
                             Box(
                                 modifier = Modifier
-                                    .size(20.dp)
+                                    .size(26.dp)
                                     .clip(CircleShape)
-                                    .background(swatchColor)
-                                    .border(1.dp, colors.onSurface.copy(alpha = 0.16f), CircleShape),
-                            )
-                        }
+                                    .clickable(enabled = isCustomColor) { showColorDialog = true },
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(20.dp)
+                                        .clip(CircleShape)
+                                        .background(swatchColor)
+                                        .border(1.dp, colors.onSurface.copy(alpha = 0.16f), CircleShape),
+                                )
+                            }
+                        },
+                    )
+                }
+            }
+        }
+
+        Column {
+            SmallTitle(text = stringResource(R.string.section_general), insideMargin = SectionTitleMargin)
+            Card(modifier = Modifier.fillMaxWidth(), cornerRadius = 20.dp, insideMargin = CardMargin) {
+                SwitchRow(
+                    title = stringResource(R.string.pref_hide_icon),
+                    summary = stringResource(R.string.pref_hide_icon_summary),
+                    icon = MiuixIcons.Hide,
+                    checked = preferences.launcherIconHidden,
+                    onCheckedChange = { hidden ->
+                        actions.updateLauncherIconHidden(hidden)
+                        showMessage(if (hidden) iconHiddenMsg else iconShownMsg)
                     },
                 )
             }
         }
 
-        SmallTitle(text = stringResource(R.string.section_tools), insideMargin = SectionTitleMargin)
-        Card(modifier = Modifier.fillMaxWidth(), cornerRadius = 20.dp, insideMargin = CardMargin) {
-            SwitchRow(
-                title = stringResource(R.string.pref_hide_icon),
-                summary = stringResource(R.string.pref_hide_icon_summary),
-                icon = MiuixIcons.Hide,
-                checked = preferences.launcherIconHidden,
-                onCheckedChange = { hidden ->
-                    actions.updateLauncherIconHidden(hidden)
-                    showMessage(if (hidden) iconHiddenMsg else iconShownMsg)
-                },
-            )
-            ManagerRow(
-                title = stringResource(R.string.tool_autofill_test),
-                summary = stringResource(R.string.tool_autofill_test_summary),
-                icon = MiuixIcons.Lock,
-                showChevron = true,
-                onClick = onOpenTest,
-            )
+        Column {
+            SmallTitle(text = stringResource(R.string.section_tools), insideMargin = SectionTitleMargin)
+            Card(modifier = Modifier.fillMaxWidth(), cornerRadius = 20.dp, insideMargin = CardMargin) {
+                ManagerRow(
+                    title = stringResource(R.string.tool_autofill_test),
+                    summary = stringResource(R.string.tool_autofill_test_summary),
+                    icon = keyboardIcon,
+                    showChevron = true,
+                    onClick = onOpenTest,
+                )
+            }
         }
     }
 

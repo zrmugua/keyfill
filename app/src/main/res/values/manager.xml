@@ -54,20 +54,20 @@
     <string name="process_system">系统框架 (system_server)</string>
     <string name="process_keyboard">%1$s (%2$s)</string>
     <string name="process_summary">PID %1$d · 版本 %2$d · %3$s</string>
-    <string name="process_state_up_to_date">已最新</string>
+    <string name="process_state_up_to_date">最新</string>
     <string name="process_state_stale">需重载</string>
     <string name="process_state_reloading">重载中</string>
     <string name="process_state_failed">加载失败</string>
 
-    <string name="section_appearance">显示与外观</string>
-    <string name="pref_theme_mode">深浅色模式</string>
+    <string name="section_appearance">外观</string>
+    <string name="pref_theme_mode">主题模式</string>
     <string name="pref_theme_system">跟随系统</string>
-    <string name="pref_theme_light">浅色模式</string>
-    <string name="pref_theme_dark">深色模式</string>
-    <string name="pref_monet">莫奈动态取色</string>
-    <string name="pref_monet_summary">跟随系统壁纸或自定义主题色生成强调色</string>
+    <string name="pref_theme_light">浅色</string>
+    <string name="pref_theme_dark">深色</string>
+    <string name="pref_monet">动态取色</string>
+    <string name="pref_monet_summary">跟随系统壁纸或自定义配色</string>
     <string name="pref_key_color">主题色</string>
-    <string name="pref_key_color_default">跟随系统</string>
+    <string name="pref_key_color_default">跟随壁纸</string>
     <string name="pref_key_color_custom">自定义颜色</string>
     <string name="pref_key_color_custom_hex">自定义 (%1$s)</string>
     <string name="key_color_dialog_title">自定义主题色</string>
@@ -89,12 +89,13 @@
     <string name="color_blue_grey">灰蓝</string>
     <string name="color_sakura">樱花</string>
 
-    <string name="section_tools">实用工具</string>
+    <string name="section_general">常规</string>
     <string name="pref_hide_icon">隐藏桌面图标</string>
-    <string name="pref_hide_icon_summary">隐藏后仍可从 LSPosed 管理器模块设置进入</string>
-    <string name="tool_autofill_test">内联填充测试</string>
-    <string name="tool_autofill_test_summary">打开模拟登录输入框，直接验证键盘顶部填充条</string>
-    <string name="test_dialog_title">内联自动填充测试</string>
+    <string name="pref_hide_icon_summary">隐藏后可在 LSPosed 中打开</string>
+    <string name="section_tools">工具</string>
+    <string name="tool_autofill_test">自动填充测试</string>
+    <string name="tool_autofill_test_summary">打开模拟登录框，验证键盘建议条</string>
+    <string name="test_dialog_title">自动填充测试</string>
     <string name="test_dialog_summary">点击下方输入框唤起键盘，检查密码管理器建议条是否正常显示。</string>
     <string name="test_hint_username">账号 / 邮箱</string>
     <string name="test_hint_password">密码</string>
@@ -107,7 +108,7 @@
     <string name="snackbar_scope_failed">作用域申请未通过：%1$s</string>
     <string name="snackbar_scope_all_ready">所需作用域均已勾选</string>
     <string name="snackbar_open_failed">无法打开目标页面</string>
-    <string name="snackbar_icon_hidden">已隐藏桌面图标，可从 LSPosed 模块设置打开</string>
+    <string name="snackbar_icon_hidden">已隐藏桌面图标，可在 LSPosed 中打开</string>
     <string name="snackbar_icon_shown">已恢复桌面图标</string>
 
     <string name="about_version_line">%1$s (%2$d) | %3$s</string>
