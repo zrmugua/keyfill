@@ -10,5 +10,6 @@
 *.dex
 *.jks
 *.keystore
+signing.properties
 .DS_Store
 Thumbs.db

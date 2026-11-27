@@ -3,6 +3,28 @@ plugins {
     id 'org.jetbrains.kotlin.plugin.compose'
 }
 
+def signingProps = new Properties()
+def signingPropsFile = rootProject.file('signing.properties')
+if (signingPropsFile.exists()) {
+    signingPropsFile.withInputStream { signingProps.load(it) }
+}
+
+def resolvedStorePath = System.getenv('KEYSTORE_FILE') ?: signingProps.getProperty('storeFile')
+def resolvedStorePassword = System.getenv('KEYSTORE_PASSWORD') ?: signingProps.getProperty('storePassword')
+def resolvedKeyAlias = System.getenv('KEY_ALIAS') ?: signingProps.getProperty('keyAlias')
+def resolvedKeyPassword = System.getenv('KEY_PASSWORD') ?: signingProps.getProperty('keyPassword')
+
+def resolvedStoreFile = resolvedStorePath ? rootProject.file(resolvedStorePath) : null
+def hasReleaseSigning = resolvedStoreFile != null && resolvedStoreFile.exists() &&
+        resolvedStorePassword && resolvedKeyAlias && resolvedKeyPassword
+def requireReleaseSigning = System.getenv('REQUIRE_RELEASE_SIGNING') == 'true'
+
+if (requireReleaseSigning && !hasReleaseSigning) {
+    throw new GradleException(
+            'REQUIRE_RELEASE_SIGNING=true, but release keystore configuration is missing or keystore file does not exist.'
+    )
+}
+
 android {
     namespace = 'com.mugua.keyfill'
     compileSdk {
@@ -19,11 +41,22 @@ android {
         versionName = '0.4.0'
     }
 
+    signingConfigs {
+        if (hasReleaseSigning) {
+            release {
+                storeFile = resolvedStoreFile
+                storePassword = resolvedStorePassword
+                keyAlias = resolvedKeyAlias
+                keyPassword = resolvedKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled = true
             shrinkResources = false
-            signingConfig = signingConfigs.debug
+            signingConfig = hasReleaseSigning ? signingConfigs.release : signingConfigs.debug
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
