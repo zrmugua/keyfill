@@ -33,6 +33,7 @@ final class SogouToolbar extends LinearLayout implements ImeToolbar, ViewTreeObs
     private final View rootCanvasView;
     private final Method rowHeightMethod;
     private final Field pField;
+    private final Field c0Field;
     private final Field d0Field;
     private final Field mField;
     private final Field aField;
@@ -42,8 +43,11 @@ final class SogouToolbar extends LinearLayout implements ImeToolbar, ViewTreeObs
     private final Field zViewField;
     private final Method compVisibleMethod;
     private final Method compLeftMethod;
+    private final Method compTopMethod;
+    private final Method compHeightMethod;
     private final Field compScrollXField;
     private final Method findFuncIndexMethod;
+    private final Method itemTopMethod;
     private final Field k1Field;
     private final Field f0RectField;
     private final Method itemBoundsMethod;
@@ -64,9 +68,11 @@ final class SogouToolbar extends LinearLayout implements ImeToolbar, ViewTreeObs
     private boolean dark;
     private boolean clippedByUs;
     private boolean alphaHiddenByUs;
-    private int rowHeight;
+    private int barHeight;
+    private int topMarginPx;
     private int logoInset;
-    private final int leftPad;
+    private int rightMarginPx;
+    private int leftPad;
     private final int rightPad;
     private final int heightPx;
 
@@ -91,6 +97,10 @@ final class SogouToolbar extends LinearLayout implements ImeToolbar, ViewTreeObs
                 if (Color.alpha(bgColor) > 0) {
                     return Color.luminance(bgColor | 0xff000000) < 0.45f;
                 }
+                int textColor = (int) uiT.getMethod("h").invoke(null);
+                if (textColor != 0x7fffffff && Color.alpha(textColor) > 0) {
+                    return Color.luminance(textColor | 0xff000000) > 0.55f;
+                }
                 Class<?> themeF = Class.forName("com.sogou.theme.impl.f", false, loader);
                 if (themeF.getMethod("b").invoke(null) instanceof Boolean darkSkin) {
                     return darkSkin;
@@ -114,6 +124,7 @@ final class SogouToolbar extends LinearLayout implements ImeToolbar, ViewTreeObs
         Field h0Field = findField(containerClass, "H0");
         rootCanvasView = h0Field.get(candidate) instanceof View v ? v : null;
         pField = findField(containerClass, "p");
+        c0Field = findOptionalField(containerClass, "c0");
         d0Field = findField(containerClass, "d0");
         mField = findField(containerClass, "m");
         aField = findField(containerClass, "A");
@@ -132,10 +143,13 @@ final class SogouToolbar extends LinearLayout implements ImeToolbar, ViewTreeObs
         Class<?> compClass = Class.forName("com.sogou.imskit.core.ui.virtualwidget.component.Component", false, loader);
         compVisibleMethod = compClass.getMethod("I1");
         compLeftMethod = compClass.getMethod("g1");
+        compTopMethod = compClass.getMethod("v1");
+        compHeightMethod = compClass.getMethod("l1");
         compScrollXField = findField(compClass, "o");
 
         Class<?> funcViewClass = Class.forName("com.sohu.inputmethod.sogou.NewIMEFunctionCandidateView", false, loader);
         findFuncIndexMethod = funcViewClass.getMethod("J3", int.class);
+        itemTopMethod = findOptionalMethod(funcViewClass, "W3");
         k1Field = findField(funcViewClass, "k1");
         f0RectField = findField(funcViewClass, "F0");
         itemBoundsMethod = k1Field.getType().getMethod("e", int.class);
@@ -169,15 +183,18 @@ final class SogouToolbar extends LinearLayout implements ImeToolbar, ViewTreeObs
         floatHelperGet = fGet;
         floatHelperActive = fActive;
 
-        rowHeight = resolveRowHeight();
+        int rowHeight = resolveRowHeight();
+        heightPx = Math.min(dp(34), Math.max(dp(26), rowHeight - dp(8)));
+        barHeight = Math.min(rowHeight, heightPx + dp(8));
         int rawLogoRight = resolveLogoRight();
         logoInset = rawLogoRight > 0 ? rawLogoRight : Math.max(0, d0Field.getInt(candidate));
-        leftPad = rawLogoRight > 0 ? dp(4) : dp(10);
-        rightPad = dp(10);
-        heightPx = Math.min(dp(34), Math.max(dp(26), rowHeight - dp(8)));
+        rightMarginPx = resolveRightMargin();
+        leftPad = rawLogoRight > 0 ? 0 : dp(12);
+        rightPad = dp(15);
+        topMarginPx = computeVerticalPlacement(barHeight);
 
         setGravity(Gravity.CENTER_VERTICAL);
-        setPadding(leftPad, 0, rightPad, 0);
+        setPadding(leftPad, getPaddingTop(), rightPad, getPaddingBottom());
         setBackgroundColor(Color.TRANSPARENT);
         setClickable(true);
         setVisibility(INVISIBLE);
@@ -195,7 +212,7 @@ final class SogouToolbar extends LinearLayout implements ImeToolbar, ViewTreeObs
 
     @Override
     public int availableWidth(boolean hasPinned, int pinnedGapPx) {
-        int width = candidate.getWidth() - logoInset - leftPad - rightPad;
+        int width = candidate.getWidth() - logoInset - rightMarginPx - leftPad - rightPad;
         if (hasPinned) {
             width -= heightPx + pinnedGapPx;
         }
@@ -205,7 +222,7 @@ final class SogouToolbar extends LinearLayout implements ImeToolbar, ViewTreeObs
     @Override
     public Drawable cardBackground(boolean pinned, boolean isDark) {
         GradientDrawable shape = new GradientDrawable();
-        shape.setCornerRadius(dp(pinned ? 12 : 16));
+        shape.setCornerRadius(heightPx / 2f);
         applySlotStyle(shape, isDark);
         slotShapes.add(shape);
         return new RippleDrawable(ColorStateList.valueOf(isDark ? 0x24ffffff : 0x19000000), shape, null);
@@ -214,11 +231,13 @@ final class SogouToolbar extends LinearLayout implements ImeToolbar, ViewTreeObs
     @Override
     public View attach(ViewGroup host) {
         RelativeLayout.LayoutParams params = new RelativeLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, rowHeight);
-        params.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
+                ViewGroup.LayoutParams.MATCH_PARENT, barHeight);
+        params.addRule(RelativeLayout.ALIGN_PARENT_TOP);
         params.addRule(RelativeLayout.ALIGN_PARENT_LEFT);
         params.addRule(RelativeLayout.ALIGN_PARENT_RIGHT);
+        params.topMargin = topMarginPx;
         params.leftMargin = logoInset;
+        params.rightMargin = rightMarginPx;
         host.addView(this, params);
         bringToFront();
         return this;
@@ -244,14 +263,27 @@ final class SogouToolbar extends LinearLayout implements ImeToolbar, ViewTreeObs
         }
         syncTheme();
         int currentRowHeight = resolveRowHeight();
+        int currentBarHeight = Math.min(currentRowHeight, heightPx + dp(8));
         int rawLogoRight = resolveLogoRight();
         int currentInset = rawLogoRight > 0 ? rawLogoRight : fallbackLeftOffset();
-        if ((currentRowHeight != rowHeight || currentInset != logoInset)
+        int currentRightMargin = resolveRightMargin();
+        int currentLeftPad = rawLogoRight > 0 ? 0 : dp(12);
+        int currentTopMargin = computeVerticalPlacement(currentBarHeight);
+        if (currentLeftPad != leftPad) {
+            leftPad = currentLeftPad;
+            setPadding(leftPad, getPaddingTop(), rightPad, getPaddingBottom());
+        }
+        if ((currentBarHeight != barHeight || currentTopMargin != topMarginPx
+                || currentInset != logoInset || currentRightMargin != rightMarginPx)
                 && getLayoutParams() instanceof RelativeLayout.LayoutParams params) {
-            rowHeight = currentRowHeight;
+            barHeight = currentBarHeight;
+            topMarginPx = currentTopMargin;
             logoInset = currentInset;
-            params.height = currentRowHeight;
+            rightMarginPx = currentRightMargin;
+            params.height = currentBarHeight;
+            params.topMargin = currentTopMargin;
             params.leftMargin = currentInset;
+            params.rightMargin = currentRightMargin;
             setLayoutParams(params);
         }
         boolean show = canShowSuggestions();
@@ -415,6 +447,73 @@ final class SogouToolbar extends LinearLayout implements ImeToolbar, ViewTreeObs
         }
     }
 
+    private int computeVerticalPlacement(int currentBarHeight) {
+        int containerHeight = candidate.getHeight();
+        float targetCenterY = resolveLogoCenterY(containerHeight, currentBarHeight);
+        int maxTop = Math.max(0, containerHeight - currentBarHeight);
+        int topMargin = containerHeight > 0
+                ? Math.max(0, Math.min(maxTop, Math.round(targetCenterY - currentBarHeight / 2f)))
+                : 0;
+        int residual = containerHeight > 0
+                ? Math.round(2f * targetCenterY - 2f * topMargin - currentBarHeight)
+                : 0;
+        int maxShift = Math.max(0, currentBarHeight - heightPx);
+        residual = Math.max(-maxShift, Math.min(maxShift, residual));
+        int topPad = Math.max(0, residual);
+        int bottomPad = Math.max(0, -residual);
+        if (topPad != getPaddingTop() || bottomPad != getPaddingBottom()) {
+            setPadding(leftPad, topPad, rightPad, bottomPad);
+        }
+        return topMargin;
+    }
+
+    private float resolveLogoCenterY(int containerHeight, int currentBarHeight) {
+        int rootTop = rootCanvasView != null ? rootCanvasView.getTop() : 0;
+        try {
+            Object p = pField.get(candidate);
+            if (p != null) {
+                int pTop = (int) compTopMethod.invoke(p);
+                int pHeight = (int) compHeightMethod.invoke(p);
+                int logoIdx = (int) findFuncIndexMethod.invoke(p, LOGO_FUNC_ID);
+                Object layoutHelper = logoIdx >= 0 ? k1Field.get(p) : null;
+                if (layoutHelper != null && itemBoundsMethod.invoke(layoutHelper, logoIdx) instanceof RectF rect
+                        && rect.height() > 0f) {
+                    if (itemTopMethod != null) {
+                        int itemTop = (int) itemTopMethod.invoke(p);
+                        return rootTop + pTop + itemTop + rect.height() / 2f;
+                    }
+                    Rect pad = (Rect) f0RectField.get(p);
+                    float centerInP = (pad != null && pinnedFuncClass != null
+                            && pinnedFuncClass.isInstance(p) && rect.top < pad.top)
+                            ? (pad.top + rect.centerY()) : rect.centerY();
+                    if (centerInP > 0f && (pHeight <= 0 || centerInP < pHeight)) {
+                        return rootTop + pTop + centerInP;
+                    }
+                }
+                if (pHeight > 0) {
+                    return rootTop + pTop + pHeight / 2f;
+                }
+            }
+        } catch (ReflectiveOperationException | RuntimeException ignored) {
+            // Fall back to container center.
+        }
+        return containerHeight > 0 ? containerHeight / 2f : currentBarHeight / 2f;
+    }
+
+    private int resolveRightMargin() {
+        if (c0Field != null && candidate.getWidth() > 0) {
+            try {
+                int c0 = c0Field.getInt(candidate);
+                if (c0 > 0 && candidate.getWidth() > c0) {
+                    return candidate.getWidth() - c0;
+                }
+            } catch (ReflectiveOperationException ignored) {
+                // Ignore optional split/one-handed right bound.
+            }
+        }
+        return 0;
+    }
+
     private int fallbackLeftOffset() {
         try {
             return Math.max(0, d0Field.getInt(candidate));
@@ -446,6 +545,14 @@ final class SogouToolbar extends LinearLayout implements ImeToolbar, ViewTreeObs
         throw new NoSuchMethodException(start.getName() + "." + name);
     }
 
+    private static Method findOptionalMethod(Class<?> start, String name, Class<?>... parameterTypes) {
+        try {
+            return findMethod(start, name, parameterTypes);
+        } catch (NoSuchMethodException ignored) {
+            return null;
+        }
+    }
+
     private static Field findField(Class<?> start, String name) throws NoSuchFieldException {
         for (Class<?> c = start; c != null && c != Object.class; c = c.getSuperclass()) {
             try {
@@ -459,9 +566,17 @@ final class SogouToolbar extends LinearLayout implements ImeToolbar, ViewTreeObs
         throw new NoSuchFieldException(name);
     }
 
+    private static Field findOptionalField(Class<?> start, String name) {
+        try {
+            return findField(start, name);
+        } catch (NoSuchFieldException ignored) {
+            return null;
+        }
+    }
+
     private static void applySlotStyle(GradientDrawable shape, boolean dark) {
-        shape.setColor(dark ? 0x2effffff : 0x99ffffff);
-        shape.setStroke(1, dark ? 0x22ffffff : 0x14000000);
+        shape.setColor(dark ? 0x2bffffff : 0xffffffff);
+        shape.setStroke(0, Color.TRANSPARENT);
     }
 
     private int dp(int value) {

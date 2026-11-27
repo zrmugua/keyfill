@@ -72,6 +72,8 @@ public final class AutofillModule extends XposedModule {
             hookKeyboard();
             if (target == KeyboardTarget.BAIDU) {
                 BaiduToolbar.installHooks(this, param.getClassLoader());
+            } else if (target == KeyboardTarget.IFLYTEK) {
+                IflytekToolbar.installHooks(this, param.getClassLoader());
             }
             log("Keyboard inline hooks ready for " + target.packageName);
         } catch (ReflectiveOperationException | RuntimeException | LinkageError failure) {

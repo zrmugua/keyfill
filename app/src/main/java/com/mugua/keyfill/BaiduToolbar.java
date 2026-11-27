@@ -71,7 +71,7 @@ final class BaiduToolbar extends LinearLayout implements ImeToolbar, ViewTreeObs
     private int rowHeight;
     private int leftMarginPx;
     private int rightMarginPx;
-    private final int leftPad;
+    private int leftPad;
     private final int rightPad;
     private final int heightPx;
 
@@ -183,10 +183,11 @@ final class BaiduToolbar extends LinearLayout implements ImeToolbar, ViewTreeObs
         Object handler = resolveCandHandler(candidateView);
         rowHeight = (candInputView != null && candInputView.getHeight() > 0) ? candInputView.getHeight() : dp(42);
         Rect logoRect = resolveLogoRect(handler);
-        int logoRight = (logoRect != null && logoRect.right > 0) ? logoRect.right : dp(58);
+        boolean hasLogo = logoRect != null && logoRect.right > 0;
+        int logoRight = hasLogo ? logoRect.right : dp(58);
         computeMargins(candInputView, logoRight);
-        leftPad = dp(6);
-        rightPad = dp(10);
+        leftPad = hasLogo ? 0 : dp(12);
+        rightPad = dp(16);
         heightPx = Math.min(dp(33), Math.max(dp(26), rowHeight - dp(9)));
 
         setGravity(Gravity.CENTER_VERTICAL);
@@ -218,7 +219,7 @@ final class BaiduToolbar extends LinearLayout implements ImeToolbar, ViewTreeObs
     @Override
     public Drawable cardBackground(boolean pinned, boolean isDark) {
         GradientDrawable shape = new GradientDrawable();
-        shape.setCornerRadius(dp(pinned ? 12 : 16));
+        shape.setCornerRadius(heightPx / 2f);
         applySlotStyle(shape, isDark, isDefaultBuiltinSkin());
         slotShapes.add(shape);
         return new RippleDrawable(ColorStateList.valueOf(isDark ? 0x24ffffff : 0x19000000), shape, null);
@@ -258,7 +259,9 @@ final class BaiduToolbar extends LinearLayout implements ImeToolbar, ViewTreeObs
         Object candidateView = resolveCandidateView(candInputView);
         Object handler = resolveCandHandler(candidateView);
         Rect logoRect = resolveLogoRect(handler);
-        int logoRight = (logoRect != null && logoRect.right > 0) ? logoRect.right : dp(58);
+        boolean hasLogo = logoRect != null && logoRect.right > 0;
+        int logoRight = hasLogo ? logoRect.right : dp(58);
+        int newLeftPad = hasLogo ? 0 : dp(12);
         if (candInputView != null && candInputView.getHeight() > 0) {
             int prevLeft = leftMarginPx;
             int prevRight = rightMarginPx;
@@ -272,14 +275,17 @@ final class BaiduToolbar extends LinearLayout implements ImeToolbar, ViewTreeObs
                 params.rightMargin = rightMarginPx;
                 setLayoutParams(params);
             }
+            int topPad = getPaddingTop();
+            int bottomPad = getPaddingBottom();
             if (logoRect != null && logoRect.height() > 0) {
                 int maxShift = Math.max(0, newHeight - heightPx);
                 int offset = Math.max(-maxShift, Math.min(maxShift, logoRect.top + logoRect.bottom - newHeight));
-                int topPad = Math.max(0, offset);
-                int bottomPad = Math.max(0, -offset);
-                if (topPad != getPaddingTop() || bottomPad != getPaddingBottom()) {
-                    setPadding(leftPad, topPad, rightPad, bottomPad);
-                }
+                topPad = Math.max(0, offset);
+                bottomPad = Math.max(0, -offset);
+            }
+            if (newLeftPad != leftPad || topPad != getPaddingTop() || bottomPad != getPaddingBottom()) {
+                leftPad = newLeftPad;
+                setPadding(leftPad, topPad, rightPad, bottomPad);
             }
             setTranslationY(relTop - getTop());
         }
@@ -503,11 +509,10 @@ final class BaiduToolbar extends LinearLayout implements ImeToolbar, ViewTreeObs
     private static void applySlotStyle(GradientDrawable shape, boolean dark, boolean builtinSkin) {
         if (builtinSkin) {
             shape.setColor(dark ? 0xff383a3f : 0xffffffff);
-            shape.setStroke(1, dark ? 0xff4b4d52 : 0xffd8dce3);
         } else {
-            shape.setColor(dark ? 0x2effffff : 0x88ffffff);
-            shape.setStroke(1, dark ? 0x33ffffff : 0x18000000);
+            shape.setColor(dark ? 0x2bffffff : 0xe6ffffff);
         }
+        shape.setStroke(0, Color.TRANSPARENT);
     }
 
     private static Field findField(Class<?> start, String name) throws NoSuchFieldException {

@@ -77,7 +77,7 @@ final class KeyboardInlineUi {
                     UiVersions.newStylesBuilder().addStyle(suggestionStyle(true)).build());
         }
         InlinePresentationSpec card = new InlinePresentationSpec.Builder(
-                new Size(dp(32), dp(26)), new Size(dp(360), dp(CARD_HEIGHT_DP)))
+                new Size(dp(26), dp(24)), new Size(dp(360), dp(CARD_HEIGHT_DP)))
                 .setStyle(styles)
                 .build();
         AutofillModule.log("Inline request created");
@@ -90,19 +90,20 @@ final class KeyboardInlineUi {
     private InlineSuggestionUi.Style suggestionStyle(boolean dark) {
         int titleColor = dark ? 0xfff5f5f5 : 0xff222222;
         int subtitleColor = dark ? 0xffc4c4c4 : 0xff595959;
-        int iconPadding = dp(target == KeyboardTarget.XIAO_AI ? 5 : 8);
+        int iconPadding = dp(target == KeyboardTarget.XIAO_AI ? 5 : 4);
+        int iconMax = dp(target == KeyboardTarget.XIAO_AI ? 21 : 18);
         return InlineSuggestionUi.newStyleBuilder()
                 .setChipStyle(new ViewStyle.Builder()
                         .setBackgroundColor(Color.TRANSPARENT)
-                        .setPadding(dp(13), dp(5), dp(13), dp(5))
+                        .setPadding(dp(12), dp(3), dp(12), dp(3))
                         .build())
                 .setSingleIconChipStyle(new ViewStyle.Builder()
                         .setBackgroundColor(Color.TRANSPARENT)
                         .setPadding(iconPadding, 0, iconPadding, 0)
                         .build())
                 .setSingleIconChipIconStyle(new ImageViewStyle.Builder()
-                        .setMaxWidth(dp(21))
-                        .setMaxHeight(dp(21))
+                        .setMaxWidth(iconMax)
+                        .setMaxHeight(iconMax)
                         .build())
                 .setTitleStyle(new TextViewStyle.Builder()
                         .setTextColor(titleColor)
