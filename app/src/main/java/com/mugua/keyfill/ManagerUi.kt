@@ -143,7 +143,6 @@ import top.yukonga.miuix.kmp.icon.extended.Copy
 import top.yukonga.miuix.kmp.icon.extended.Hide
 import top.yukonga.miuix.kmp.icon.extended.Home
 import top.yukonga.miuix.kmp.icon.extended.Info
-import top.yukonga.miuix.kmp.icon.extended.Layers
 import top.yukonga.miuix.kmp.icon.extended.Lock
 import top.yukonga.miuix.kmp.icon.extended.Refresh
 import top.yukonga.miuix.kmp.icon.extended.Settings
@@ -151,6 +150,7 @@ import top.yukonga.miuix.kmp.icon.extended.Show
 import top.yukonga.miuix.kmp.icon.extended.Tasks
 import top.yukonga.miuix.kmp.icon.extended.Theme
 import top.yukonga.miuix.kmp.icon.extended.Tune
+import top.yukonga.miuix.kmp.icon.extended.Unlock
 import top.yukonga.miuix.kmp.material.GlassEdgeStrokes
 import top.yukonga.miuix.kmp.theme.ColorSchemeMode
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -331,9 +331,9 @@ internal fun ManagerApp(
         val keyboardVector = ImageVector.vectorResource(R.drawable.ic_keyboard)
         val tabs = remember(homeLabel, settingsLabel, aboutLabel) {
             listOf(
-                GlassNavigationItem(icon = MiuixIcons.Home, label = homeLabel),
-                GlassNavigationItem(icon = MiuixIcons.Settings, label = settingsLabel),
-                GlassNavigationItem(icon = MiuixIcons.Info, label = aboutLabel),
+                GlassNavigationItem(icon = MiuixIcons.Medium.Home, label = homeLabel),
+                GlassNavigationItem(icon = MiuixIcons.Medium.Settings, label = settingsLabel),
+                GlassNavigationItem(icon = MiuixIcons.Medium.Info, label = aboutLabel),
             )
         }
         val showMessage: (String) -> Unit = remember(scope, snackbarHostState) {
@@ -464,7 +464,7 @@ internal fun ManagerApp(
                                                 )
                                             }
                                             item {
-                                                EnvironmentSection(
+                                                QuickServicesSection(
                                                     status = status,
                                                     xposed = xposed,
                                                     keyboardIcon = keyboardVector,
@@ -491,20 +491,11 @@ internal fun ManagerApp(
                                                     showMessage = showMessage,
                                                 )
                                             }
-                                            if (xposed.runningTargets.isNotEmpty()) {
-                                                item {
-                                                    HookedProcessesSection(
-                                                        status = status,
-                                                        targets = xposed.runningTargets,
-                                                        keyboardIcon = keyboardVector,
-                                                        actions = actions,
-                                                        showMessage = showMessage,
-                                                    )
-                                                }
-                                            }
                                         } else {
                                             item {
                                                 SettingsSection(
+                                                    status = status,
+                                                    xposed = xposed,
                                                     preferences = preferences,
                                                     backdrop = backdrop,
                                                     keyboardIcon = keyboardVector,
@@ -709,8 +700,40 @@ private fun StatusHeroCard(
     }
 }
 
+private data class IconBadgeStyle(
+    val topColor: Color,
+    val bottomColor: Color,
+    val tint: Color = Color.White,
+)
+
+private val BadgeBlue = IconBadgeStyle(Color(0xFF4C8DFF), Color(0xFF1B5EF2))
+private val BadgeEmerald = IconBadgeStyle(Color(0xFF34D399), Color(0xFF059669))
+private val BadgeIndigo = IconBadgeStyle(Color(0xFF818CF8), Color(0xFF4F46E5))
+private val BadgeSky = IconBadgeStyle(Color(0xFF38BDF8), Color(0xFF0284C7))
+private val BadgeAmber = IconBadgeStyle(Color(0xFFFBBF24), Color(0xFFF97316))
+private val BadgeViolet = IconBadgeStyle(Color(0xFFF472B6), Color(0xFF9333EA))
+private val BadgeSlate = IconBadgeStyle(Color(0xFF94A3B8), Color(0xFF475569))
+
+private fun allMissingScopePackages(status: DeviceStatus, xposed: XposedStatus): List<String> {
+    if (!xposed.active) return emptyList()
+    val result = LinkedHashSet<String>()
+    result.addAll(missingScopePackages(status, xposed))
+    if (status.hyperPasskey.supported) {
+        if (!xposed.isScoped(HyperPasskeyHooks.SETTINGS_PACKAGE)) {
+            result.add(HyperPasskeyHooks.SETTINGS_PACKAGE)
+        }
+        if (!xposed.isScoped(HyperPasskeyHooks.SECURITY_CENTER_PACKAGE)) {
+            result.add(HyperPasskeyHooks.SECURITY_CENTER_PACKAGE)
+        }
+        if (status.hyperPasskey.scannerInstalled && !xposed.isScoped(HyperPasskeyHooks.SCANNER_PACKAGE)) {
+            result.add(HyperPasskeyHooks.SCANNER_PACKAGE)
+        }
+    }
+    return result.toList()
+}
+
 @Composable
-private fun EnvironmentSection(
+private fun QuickServicesSection(
     status: DeviceStatus,
     xposed: XposedStatus,
     keyboardIcon: ImageVector,
@@ -721,7 +744,6 @@ private fun EnvironmentSection(
     val systemScopeLabel = stringResource(R.string.status_scope_system)
     val scopeApprovedMsg = stringResource(R.string.snackbar_scope_approved)
     val scopeFailedPattern = stringResource(R.string.snackbar_scope_failed)
-    val scopeReadyMsg = stringResource(R.string.snackbar_scope_all_ready)
     val refreshedMsg = stringResource(R.string.snackbar_refreshed)
     val openFailedMsg = stringResource(R.string.snackbar_open_failed)
 
@@ -735,60 +757,21 @@ private fun EnvironmentSection(
             }
         }
     }
-
-    val frameworkSummary = if (xposed.active) {
-        stringResource(R.string.status_framework_meta, xposed.frameworkName, xposed.frameworkVersion, xposed.apiVersion)
-    } else {
-        stringResource(R.string.status_framework_disconnected)
-    }
-
+    val showScopeWarning = !xposed.active || missingScopes.isNotEmpty()
     val scopeSummary = when {
         !xposed.active -> stringResource(R.string.status_scope_inactive)
         xposed.scope.isEmpty() -> stringResource(R.string.status_scope_empty)
-        missingLabels.isNotEmpty() -> stringResource(R.string.status_scope_missing, missingLabels.joinToString("、"))
-        else -> stringResource(R.string.status_scope_ready)
+        else -> stringResource(R.string.status_scope_missing, missingLabels.joinToString("、"))
     }
 
     Column {
         SmallTitle(text = stringResource(R.string.section_environment), insideMargin = SectionTitleMargin)
         Card(modifier = Modifier.fillMaxWidth(), cornerRadius = 20.dp, insideMargin = CardMargin) {
             ManagerRow(
-                title = stringResource(R.string.status_framework),
-                summary = frameworkSummary,
-                icon = MiuixIcons.Layers,
-                onClick = {
-                    actions.refresh()
-                    showMessage(refreshedMsg)
-                },
-            )
-            ManagerRow(
-                title = stringResource(R.string.status_scope),
-                summary = scopeSummary,
-                icon = MiuixIcons.Tune,
-                showChevron = xposed.active && missingScopes.isNotEmpty(),
-                onClick = if (!xposed.active) {
-                    {
-                        actions.refresh()
-                        showMessage(refreshedMsg)
-                    }
-                } else {
-                    {
-                        if (missingScopes.isEmpty()) {
-                            showMessage(scopeReadyMsg)
-                        } else {
-                            actions.requestScope(missingScopes) { ok, reason ->
-                                showMessage(
-                                    if (ok) scopeApprovedMsg else String.format(scopeFailedPattern, reason ?: "-"),
-                                )
-                            }
-                        }
-                    }
-                },
-            )
-            ManagerRow(
                 title = stringResource(R.string.status_autofill),
                 summary = status.autofillProvider?.label ?: unset,
-                icon = MiuixIcons.Lock,
+                icon = MiuixIcons.Medium.Lock,
+                badge = BadgeBlue,
                 packageName = status.autofillProvider?.packageName,
                 showChevron = true,
                 onClick = {
@@ -801,6 +784,7 @@ private fun EnvironmentSection(
                 title = stringResource(R.string.status_ime),
                 summary = status.defaultKeyboard?.label ?: unset,
                 icon = keyboardIcon,
+                badge = BadgeSky,
                 packageName = status.defaultKeyboard?.packageName,
                 showChevron = true,
                 onClick = {
@@ -809,6 +793,29 @@ private fun EnvironmentSection(
                     }
                 },
             )
+            if (showScopeWarning) {
+                ManagerRow(
+                    title = stringResource(R.string.status_scope),
+                    summary = scopeSummary,
+                    icon = MiuixIcons.Medium.Tune,
+                    badge = BadgeIndigo,
+                    showChevron = xposed.active,
+                    onClick = if (!xposed.active) {
+                        {
+                            actions.refresh()
+                            showMessage(refreshedMsg)
+                        }
+                    } else {
+                        {
+                            actions.requestScope(missingScopes) { ok, reason ->
+                                showMessage(
+                                    if (ok) scopeApprovedMsg else String.format(scopeFailedPattern, reason ?: "-"),
+                                )
+                            }
+                        }
+                    },
+                )
+            }
         }
     }
 }
@@ -885,6 +892,7 @@ private fun HyperPasskeySection(
         !xposed.active -> stringResource(R.string.passkey_unlock_inactive)
         !passkey.gmsChooserReady -> stringResource(R.string.passkey_unlock_gms_missing)
         missingLabels.isNotEmpty() -> stringResource(R.string.passkey_unlock_missing_scope, missingLabels.joinToString("、"))
+        xposed.hasStaleTarget -> stringResource(R.string.passkey_unlock_reload)
         else -> stringResource(R.string.passkey_unlock_ready, activeScopeLabels.joinToString("、"))
     }
 
@@ -892,22 +900,11 @@ private fun HyperPasskeySection(
         SmallTitle(text = stringResource(R.string.section_hyper_passkey), insideMargin = SectionTitleMargin)
         Card(modifier = Modifier.fillMaxWidth(), cornerRadius = 20.dp, insideMargin = CardMargin) {
             ManagerRow(
-                title = stringResource(R.string.passkey_provider_title),
-                summary = providerSummary,
-                icon = MiuixIcons.Lock,
-                packageName = passkey.providers.firstOrNull()?.packageName,
-                showChevron = true,
-                onClick = {
-                    if (!actions.openCredentialSettings()) {
-                        showMessage(openFailedMsg)
-                    }
-                },
-            )
-            ManagerRow(
                 title = stringResource(R.string.passkey_unlock_title),
                 summary = unlockSummary,
-                icon = MiuixIcons.Tune,
-                showChevron = true,
+                icon = MiuixIcons.Medium.Unlock,
+                badge = BadgeEmerald,
+                showChevron = !xposed.active || !passkey.gmsChooserReady || missingPackages.isNotEmpty(),
                 onClick = when {
                     !xposed.active -> {
                         {
@@ -936,6 +933,18 @@ private fun HyperPasskeySection(
                     }
                 },
             )
+            ManagerRow(
+                title = stringResource(R.string.passkey_provider_title),
+                summary = providerSummary,
+                icon = MiuixIcons.Medium.Lock,
+                badge = BadgeBlue,
+                showChevron = true,
+                onClick = {
+                    if (!actions.openCredentialSettings()) {
+                        showMessage(openFailedMsg)
+                    }
+                },
+            )
         }
     }
 }
@@ -952,124 +961,183 @@ private fun SupportedKeyboardsSection(
     val scopeFailedPattern = stringResource(R.string.snackbar_scope_failed)
     val openFailedMsg = stringResource(R.string.snackbar_open_failed)
 
+    val installedKeyboards = remember(status.keyboards) { status.keyboards.filter { it.installed } }
+    val uninstalledKeyboards = remember(status.keyboards) { status.keyboards.filter { !it.installed } }
+    var showUninstalled by rememberSaveable { mutableStateOf(false) }
+    val primaryList = if (installedKeyboards.isNotEmpty()) installedKeyboards else status.keyboards
+    val collapsibleList = if (installedKeyboards.isNotEmpty()) uninstalledKeyboards else emptyList()
+
     Column {
         SmallTitle(text = stringResource(R.string.ime_supported), insideMargin = SectionTitleMargin)
         Card(modifier = Modifier.fillMaxWidth(), cornerRadius = 20.dp, insideMargin = CardMargin) {
-            status.keyboards.forEach { keyboard ->
-                val pkg = keyboard.app.packageName
-                val isCurrent = pkg == status.defaultKeyboard?.packageName
-                val installText = stringResource(
-                    when {
-                        isCurrent -> R.string.ime_current
-                        keyboard.installed -> R.string.ime_installed
-                        else -> R.string.ime_not_installed
-                    },
+            primaryList.forEach { keyboard ->
+                KeyboardItemRow(
+                    keyboard = keyboard,
+                    defaultPackage = status.defaultKeyboard?.packageName,
+                    xposed = xposed,
+                    keyboardIcon = keyboardIcon,
+                    actions = actions,
+                    scopeApprovedMsg = scopeApprovedMsg,
+                    scopeFailedPattern = scopeFailedPattern,
+                    openFailedMsg = openFailedMsg,
+                    showMessage = showMessage,
                 )
-                val scoped = xposed.isScoped(pkg)
-                val summary = when {
-                    xposed.active && keyboard.installed -> {
-                        val scopeText = stringResource(if (scoped) R.string.ime_scoped else R.string.ime_unscoped)
-                        stringResource(R.string.ime_status_join, installText, scopeText)
-                    }
-                    keyboard.installed && isCurrent -> {
-                        stringResource(R.string.ime_status_join, installText, stringResource(R.string.ime_app_info_hint))
-                    }
-                    else -> installText
+            }
+            if (collapsibleList.isNotEmpty()) {
+                val previewNames = remember(collapsibleList) {
+                    collapsibleList.joinToString("、") { it.app.label.removeSuffix("输入法") }
                 }
-                val needsScope = xposed.active && keyboard.installed && !scoped
-                ManagerRow(
-                    title = keyboard.app.label,
-                    summary = summary,
+                ExpandableToggleRow(
+                    title = stringResource(R.string.ime_more_title),
+                    summary = stringResource(R.string.ime_more_summary, collapsibleList.size, previewNames),
                     icon = keyboardIcon,
-                    packageName = pkg,
-                    showChevron = keyboard.installed,
-                    onClick = when {
-                        needsScope -> {
-                            {
-                                actions.requestScope(listOf(pkg)) { ok, reason ->
-                                    showMessage(
-                                        if (ok) scopeApprovedMsg else String.format(scopeFailedPattern, reason ?: "-"),
-                                    )
-                                }
-                            }
-                        }
-                        keyboard.installed && !isCurrent -> {
-                            {
-                                if (!actions.openInputMethodPicker()) showMessage(openFailedMsg)
-                            }
-                        }
-                        keyboard.installed -> {
-                            {
-                                if (!actions.openAppDetails(pkg)) showMessage(openFailedMsg)
-                            }
-                        }
-                        else -> null
-                    },
+                    badge = null,
+                    expanded = showUninstalled,
+                    onToggle = { showUninstalled = !showUninstalled },
                 )
+                AnimatedVisibility(
+                    visible = showUninstalled,
+                    enter = expandVertically() + fadeIn(),
+                    exit = shrinkVertically() + fadeOut(),
+                ) {
+                    Column {
+                        collapsibleList.forEach { keyboard ->
+                            KeyboardItemRow(
+                                keyboard = keyboard,
+                                defaultPackage = status.defaultKeyboard?.packageName,
+                                xposed = xposed,
+                                keyboardIcon = keyboardIcon,
+                                actions = actions,
+                                scopeApprovedMsg = scopeApprovedMsg,
+                                scopeFailedPattern = scopeFailedPattern,
+                                openFailedMsg = openFailedMsg,
+                                showMessage = showMessage,
+                            )
+                        }
+                    }
+                }
             }
         }
     }
 }
 
 @Composable
-private fun HookedProcessesSection(
-    status: DeviceStatus,
-    targets: List<HookedProcessInfo>,
+private fun KeyboardItemRow(
+    keyboard: KeyboardStatus,
+    defaultPackage: String?,
+    xposed: XposedStatus,
     keyboardIcon: ImageVector,
     actions: ManagerActions,
+    scopeApprovedMsg: String,
+    scopeFailedPattern: String,
+    openFailedMsg: String,
     showMessage: (String) -> Unit,
 ) {
-    val openFailedMsg = stringResource(R.string.snackbar_open_failed)
-
-    Column {
-        SmallTitle(text = stringResource(R.string.section_processes), insideMargin = SectionTitleMargin)
-        Card(modifier = Modifier.fillMaxWidth(), cornerRadius = 20.dp, insideMargin = CardMargin) {
-            targets.forEach { target ->
-                val matchedKeyboard = status.keyboards.firstOrNull {
-                    target.processName == it.app.packageName || target.processName.startsWith("${it.app.packageName}:")
-                }
-                val matchedSystemApp = listOf(
-                    HyperPasskeyHooks.SETTINGS_PACKAGE to stringResource(R.string.passkey_scope_settings),
-                    HyperPasskeyHooks.SECURITY_CENTER_PACKAGE to stringResource(R.string.passkey_scope_security),
-                    HyperPasskeyHooks.SCANNER_PACKAGE to stringResource(R.string.passkey_scope_scanner),
-                ).firstOrNull { (appPkg, _) ->
-                    target.processName == appPkg || target.processName.startsWith("$appPkg:")
-                }
-                val title = when {
-                    target.processName == "system" || target.processName == "system_server" || target.processName == "android" ->
-                        stringResource(R.string.process_system)
-                    matchedSystemApp != null ->
-                        stringResource(R.string.process_keyboard, matchedSystemApp.second, target.processName)
-                    matchedKeyboard != null ->
-                        stringResource(R.string.process_keyboard, matchedKeyboard.app.label, target.processName)
-                    else -> target.processName
-                }
-                val stateLabel = stringResource(
-                    when (target.state) {
-                        HookedTarget.State.UP_TO_DATE -> R.string.process_state_up_to_date
-                        HookedTarget.State.STALE -> R.string.process_state_stale
-                        HookedTarget.State.RELOADING -> R.string.process_state_reloading
-                        HookedTarget.State.FAILED -> R.string.process_state_failed
-                    },
-                )
-                val pkg = matchedKeyboard?.app?.packageName ?: matchedSystemApp?.first
-                ManagerRow(
-                    title = title,
-                    summary = stringResource(R.string.process_summary, target.pid, target.loadedVersionCode, stateLabel),
-                    icon = if (pkg != null) keyboardIcon else MiuixIcons.Tasks,
-                    packageName = pkg,
-                    showChevron = pkg != null,
-                    onClick = if (pkg != null) {
-                        {
-                            if (!actions.openAppDetails(pkg)) showMessage(openFailedMsg)
-                        }
-                    } else {
-                        null
-                    },
-                )
-            }
+    val pkg = keyboard.app.packageName
+    val isCurrent = pkg == defaultPackage
+    val installText = stringResource(
+        when {
+            isCurrent -> R.string.ime_current
+            keyboard.installed -> R.string.ime_installed
+            else -> R.string.ime_not_installed
+        },
+    )
+    val scoped = xposed.isScoped(pkg)
+    val summary = when {
+        xposed.active && keyboard.installed -> {
+            val scopeText = stringResource(if (scoped) R.string.ime_scoped else R.string.ime_unscoped)
+            stringResource(R.string.ime_status_join, installText, scopeText)
         }
+        keyboard.installed && isCurrent -> {
+            stringResource(R.string.ime_status_join, installText, stringResource(R.string.ime_app_info_hint))
+        }
+        else -> installText
     }
+    val needsScope = xposed.active && keyboard.installed && !scoped
+    ManagerRow(
+        title = keyboard.app.label,
+        summary = summary,
+        icon = keyboardIcon,
+        badge = null,
+        packageName = if (keyboard.installed) pkg else null,
+        showChevron = keyboard.installed,
+        onClick = when {
+            needsScope -> {
+                {
+                    actions.requestScope(listOf(pkg)) { ok, reason ->
+                        showMessage(
+                            if (ok) scopeApprovedMsg else String.format(scopeFailedPattern, reason ?: "-"),
+                        )
+                    }
+                }
+            }
+            keyboard.installed && !isCurrent -> {
+                {
+                    if (!actions.openInputMethodPicker()) showMessage(openFailedMsg)
+                }
+            }
+            keyboard.installed -> {
+                {
+                    if (!actions.openAppDetails(pkg)) showMessage(openFailedMsg)
+                }
+            }
+            else -> null
+        },
+    )
+}
+
+@Composable
+private fun HookedProcessRow(
+    status: DeviceStatus,
+    target: HookedProcessInfo,
+    keyboardIcon: ImageVector,
+    actions: ManagerActions,
+    openFailedMsg: String,
+    showMessage: (String) -> Unit,
+) {
+    val matchedKeyboard = status.keyboards.firstOrNull {
+        target.processName == it.app.packageName || target.processName.startsWith("${it.app.packageName}:")
+    }
+    val matchedSystemApp = listOf(
+        HyperPasskeyHooks.SETTINGS_PACKAGE to stringResource(R.string.passkey_scope_settings),
+        HyperPasskeyHooks.SECURITY_CENTER_PACKAGE to stringResource(R.string.passkey_scope_security),
+        HyperPasskeyHooks.SCANNER_PACKAGE to stringResource(R.string.passkey_scope_scanner),
+    ).firstOrNull { (appPkg, _) ->
+        target.processName == appPkg || target.processName.startsWith("$appPkg:")
+    }
+    val title = when {
+        target.processName == "system" || target.processName == "system_server" || target.processName == "android" ->
+            stringResource(R.string.process_system)
+        matchedSystemApp != null ->
+            stringResource(R.string.process_keyboard, matchedSystemApp.second, target.processName)
+        matchedKeyboard != null ->
+            stringResource(R.string.process_keyboard, matchedKeyboard.app.label, target.processName)
+        else -> target.processName
+    }
+    val stateLabel = stringResource(
+        when (target.state) {
+            HookedTarget.State.UP_TO_DATE -> R.string.process_state_up_to_date
+            HookedTarget.State.STALE -> R.string.process_state_stale
+            HookedTarget.State.RELOADING -> R.string.process_state_reloading
+            HookedTarget.State.FAILED -> R.string.process_state_failed
+        },
+    )
+    val pkg = matchedKeyboard?.app?.packageName ?: matchedSystemApp?.first
+    ManagerRow(
+        title = title,
+        summary = stringResource(R.string.process_summary, target.pid, target.loadedVersionCode, stateLabel),
+        icon = if (pkg != null) keyboardIcon else MiuixIcons.Medium.Tasks,
+        badge = if (pkg == null) BadgeEmerald else null,
+        packageName = pkg,
+        showChevron = pkg != null,
+        onClick = if (pkg != null) {
+            {
+                if (!actions.openAppDetails(pkg)) showMessage(openFailedMsg)
+            }
+        } else {
+            null
+        },
+    )
 }
 
 private data class KeyColorPreset(val labelRes: Int, val color: Int)
@@ -1094,6 +1162,8 @@ private val KeyColorPresets = listOf(
 
 @Composable
 private fun SettingsSection(
+    status: DeviceStatus,
+    xposed: XposedStatus,
     preferences: UiPreferences,
     backdrop: Backdrop,
     keyboardIcon: ImageVector,
@@ -1108,6 +1178,7 @@ private fun SettingsSection(
         stringResource(R.string.pref_theme_dark),
     )
     var showColorDialog by rememberSaveable { mutableStateOf(false) }
+    var showProcesses by rememberSaveable { mutableStateOf(false) }
     val activeColor = preferences.keyColor
     val presetIndex = KeyColorPresets.indexOfFirst { it.color == activeColor }
     val isCustomColor = activeColor != 0 && presetIndex < 0
@@ -1129,6 +1200,42 @@ private fun SettingsSection(
     val swatchColor = if (activeColor != 0) Color(activeColor or -0x1000000) else colors.primary
     val iconHiddenMsg = stringResource(R.string.snackbar_icon_hidden)
     val iconShownMsg = stringResource(R.string.snackbar_icon_shown)
+    val scopeApprovedMsg = stringResource(R.string.snackbar_scope_approved)
+    val scopeFailedPattern = stringResource(R.string.snackbar_scope_failed)
+    val scopeReadyMsg = stringResource(R.string.snackbar_scope_all_ready)
+    val refreshedMsg = stringResource(R.string.snackbar_refreshed)
+    val openFailedMsg = stringResource(R.string.snackbar_open_failed)
+
+    val systemLabel = stringResource(R.string.status_scope_system)
+    val settingsLabel = stringResource(R.string.passkey_scope_settings)
+    val securityLabel = stringResource(R.string.passkey_scope_security)
+    val scannerLabel = stringResource(R.string.passkey_scope_scanner)
+    val missingAllScopes = remember(status, xposed) { allMissingScopePackages(status, xposed) }
+    val missingAllLabels = remember(missingAllScopes, status, systemLabel, settingsLabel, securityLabel, scannerLabel) {
+        missingAllScopes.map { pkg ->
+            when (pkg) {
+                "android" -> systemLabel
+                HyperPasskeyHooks.SETTINGS_PACKAGE -> settingsLabel
+                HyperPasskeyHooks.SECURITY_CENTER_PACKAGE -> securityLabel
+                HyperPasskeyHooks.SCANNER_PACKAGE -> scannerLabel
+                else -> status.keyboards.firstOrNull { it.app.packageName == pkg }?.app?.label ?: pkg
+            }
+        }
+    }
+    val scopeSummary = when {
+        !xposed.active -> stringResource(R.string.status_scope_inactive)
+        xposed.scope.isEmpty() -> stringResource(R.string.status_scope_empty)
+        missingAllLabels.isNotEmpty() -> stringResource(R.string.status_scope_missing, missingAllLabels.joinToString("、"))
+        else -> stringResource(R.string.status_scope_ready)
+    }
+
+    val targets = xposed.runningTargets
+    val staleCount = remember(targets) { targets.count { it.state != HookedTarget.State.UP_TO_DATE } }
+    val processesSummary = when {
+        targets.isEmpty() -> stringResource(R.string.processes_summary_empty)
+        staleCount > 0 -> stringResource(R.string.processes_summary_stale, targets.size, staleCount)
+        else -> stringResource(R.string.processes_summary_ok, targets.size)
+    }
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Column {
@@ -1141,12 +1248,13 @@ private fun SettingsSection(
                     onSelectedIndexChange = { actions.updateThemeMode(it) },
                     backdrop = backdrop,
                     insideMargin = RowMargin,
-                    startAction = { PackageIcon(null, MiuixIcons.Theme) },
+                    startAction = { SquircleIconBadge(MiuixIcons.Medium.Theme, BadgeAmber) },
                 )
                 SwitchRow(
                     title = stringResource(R.string.pref_monet),
                     summary = stringResource(R.string.pref_monet_summary),
-                    icon = MiuixIcons.Background,
+                    icon = MiuixIcons.Medium.Background,
+                    badge = BadgeViolet,
                     checked = preferences.monetEnabled,
                     onCheckedChange = { actions.updateMonet(it) },
                 )
@@ -1171,19 +1279,16 @@ private fun SettingsSection(
                         startAction = {
                             Box(
                                 modifier = Modifier
-                                    .size(26.dp)
-                                    .clip(CircleShape)
+                                    .size(34.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(swatchColor)
+                                    .border(
+                                        0.75.dp,
+                                        colors.onSurface.copy(alpha = 0.14f),
+                                        RoundedCornerShape(10.dp),
+                                    )
                                     .clickable(enabled = isCustomColor) { showColorDialog = true },
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(20.dp)
-                                        .clip(CircleShape)
-                                        .background(swatchColor)
-                                        .border(1.dp, colors.onSurface.copy(alpha = 0.16f), CircleShape),
-                                )
-                            }
+                            )
                         },
                     )
                 }
@@ -1193,10 +1298,36 @@ private fun SettingsSection(
         Column {
             SmallTitle(text = stringResource(R.string.section_general), insideMargin = SectionTitleMargin)
             Card(modifier = Modifier.fillMaxWidth(), cornerRadius = 20.dp, insideMargin = CardMargin) {
+                ManagerRow(
+                    title = stringResource(R.string.status_scope),
+                    summary = scopeSummary,
+                    icon = MiuixIcons.Medium.Tune,
+                    badge = BadgeIndigo,
+                    showChevron = xposed.active && missingAllScopes.isNotEmpty(),
+                    onClick = if (!xposed.active) {
+                        {
+                            actions.refresh()
+                            showMessage(refreshedMsg)
+                        }
+                    } else {
+                        {
+                            if (missingAllScopes.isEmpty()) {
+                                showMessage(scopeReadyMsg)
+                            } else {
+                                actions.requestScope(missingAllScopes) { ok, reason ->
+                                    showMessage(
+                                        if (ok) scopeApprovedMsg else String.format(scopeFailedPattern, reason ?: "-"),
+                                    )
+                                }
+                            }
+                        }
+                    },
+                )
                 SwitchRow(
                     title = stringResource(R.string.pref_hide_icon),
                     summary = stringResource(R.string.pref_hide_icon_summary),
-                    icon = MiuixIcons.Hide,
+                    icon = MiuixIcons.Medium.Hide,
+                    badge = BadgeSlate,
                     checked = preferences.launcherIconHidden,
                     onCheckedChange = { hidden ->
                         actions.updateLauncherIconHidden(hidden)
@@ -1213,9 +1344,49 @@ private fun SettingsSection(
                     title = stringResource(R.string.tool_autofill_test),
                     summary = stringResource(R.string.tool_autofill_test_summary),
                     icon = keyboardIcon,
+                    badge = BadgeSky,
                     showChevron = true,
                     onClick = onOpenTest,
                 )
+                if (targets.isNotEmpty()) {
+                    ExpandableToggleRow(
+                        title = stringResource(R.string.section_processes),
+                        summary = processesSummary,
+                        icon = MiuixIcons.Medium.Tasks,
+                        badge = BadgeEmerald,
+                        expanded = showProcesses,
+                        onToggle = { showProcesses = !showProcesses },
+                    )
+                    AnimatedVisibility(
+                        visible = showProcesses,
+                        enter = expandVertically() + fadeIn(),
+                        exit = shrinkVertically() + fadeOut(),
+                    ) {
+                        Column {
+                            targets.forEach { target ->
+                                HookedProcessRow(
+                                    status = status,
+                                    target = target,
+                                    keyboardIcon = keyboardIcon,
+                                    actions = actions,
+                                    openFailedMsg = openFailedMsg,
+                                    showMessage = showMessage,
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    ManagerRow(
+                        title = stringResource(R.string.section_processes),
+                        summary = processesSummary,
+                        icon = MiuixIcons.Medium.Tasks,
+                        badge = BadgeEmerald,
+                        onClick = {
+                            actions.refresh()
+                            showMessage(refreshedMsg)
+                        },
+                    )
+                }
             }
         }
     }
@@ -2058,6 +2229,7 @@ private fun SwitchRow(
     title: String,
     summary: String,
     icon: ImageVector,
+    badge: IconBadgeStyle? = null,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
 ) {
@@ -2065,7 +2237,7 @@ private fun SwitchRow(
         title = title,
         summary = summary,
         insideMargin = RowMargin,
-        startAction = { PackageIcon(null, icon) },
+        startAction = { PackageIcon(null, icon, badge) },
         endActions = {
             Switch(
                 checked = checked,
@@ -2078,10 +2250,44 @@ private fun SwitchRow(
 }
 
 @Composable
+private fun ExpandableToggleRow(
+    title: String,
+    summary: String,
+    icon: ImageVector,
+    badge: IconBadgeStyle?,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+) {
+    val rotation by animateFloatAsState(
+        targetValue = if (expanded) 270f else 90f,
+        animationSpec = tween(durationMillis = 200),
+    )
+    BasicComponent(
+        title = title,
+        summary = summary,
+        insideMargin = RowMargin,
+        startAction = { PackageIcon(null, icon, badge) },
+        endActions = {
+            Icon(
+                imageVector = MiuixIcons.Basic.ArrowRight,
+                contentDescription = null,
+                modifier = Modifier
+                    .size(width = 10.dp, height = 16.dp)
+                    .align(Alignment.CenterVertically)
+                    .graphicsLayer { rotationZ = rotation },
+                tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+            )
+        },
+        onClick = onToggle,
+    )
+}
+
+@Composable
 private fun ManagerRow(
     title: String,
     summary: String,
     icon: ImageVector,
+    badge: IconBadgeStyle? = null,
     packageName: String? = null,
     showChevron: Boolean = false,
     onClick: (() -> Unit)? = null,
@@ -2090,7 +2296,7 @@ private fun ManagerRow(
         title = title,
         summary = summary,
         insideMargin = RowMargin,
-        startAction = { PackageIcon(packageName, icon) },
+        startAction = { PackageIcon(packageName, icon, badge) },
         endActions = {
             if (showChevron) {
                 Icon(
@@ -2108,19 +2314,62 @@ private fun ManagerRow(
 }
 
 @Composable
-private fun PackageIcon(packageName: String?, fallback: ImageVector) {
+private fun SquircleIconBadge(
+    icon: ImageVector,
+    badge: IconBadgeStyle?,
+) {
+    val colors = MiuixTheme.colorScheme
+    val shape = RoundedCornerShape(10.dp)
+    val bgModifier = if (badge != null) {
+        Modifier.background(
+            Brush.linearGradient(
+                colors = listOf(badge.topColor, badge.bottomColor),
+            ),
+        )
+    } else {
+        Modifier.background(colors.onSurface.copy(alpha = 0.07f))
+    }
+    Box(
+        modifier = Modifier
+            .size(34.dp)
+            .clip(shape)
+            .then(bgModifier),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            modifier = Modifier.size(19.dp),
+            tint = badge?.tint ?: colors.onSurfaceVariantSummary,
+        )
+    }
+}
+
+@Composable
+private fun PackageIcon(
+    packageName: String?,
+    fallback: ImageVector,
+    badge: IconBadgeStyle? = null,
+) {
     val context = LocalContext.current
     val bitmap = remember(context, packageName) {
         AppIconCache.get(context.packageManager, packageName)
     }
     if (bitmap != null) {
-        Image(bitmap, contentDescription = null, modifier = Modifier.size(26.dp))
-    } else {
-        Icon(
-            imageVector = fallback,
+        val shape = RoundedCornerShape(10.dp)
+        Image(
+            bitmap = bitmap,
             contentDescription = null,
-            modifier = Modifier.size(26.dp),
-            tint = MiuixTheme.colorScheme.onSurface,
+            modifier = Modifier
+                .size(34.dp)
+                .clip(shape)
+                .border(
+                    0.5.dp,
+                    MiuixTheme.colorScheme.onSurface.copy(alpha = 0.08f),
+                    shape,
+                ),
         )
+    } else {
+        SquircleIconBadge(icon = fallback, badge = badge)
     }
 }

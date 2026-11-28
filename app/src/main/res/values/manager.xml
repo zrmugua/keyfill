@@ -20,11 +20,11 @@
     <string name="status_setup_ime">请切换到已适配的输入法</string>
     <string name="status_reload_summary">模块版本已更新，点击下方输入法结束运行或重启生效</string>
 
-    <string name="section_environment">运行环境</string>
+    <string name="section_environment">核心服务</string>
     <string name="status_framework">Xposed 框架</string>
     <string name="status_framework_disconnected">未连接，请在 LSPosed 中启用模块</string>
     <string name="status_scope">模块作用域</string>
-    <string name="status_scope_ready">系统框架与输入法作用域已就绪</string>
+    <string name="status_scope_ready">所需作用域已全部就绪</string>
     <string name="status_scope_inactive">启用模块后自动读取</string>
     <string name="status_scope_empty">未勾选作用域，点此申请</string>
     <string name="status_scope_missing">缺少 %1$s，点此申请</string>
@@ -34,21 +34,24 @@
     <string name="status_not_configured">未设置，点此前往系统设置</string>
 
     <string name="section_hyper_passkey">HyperOS 通行密钥</string>
-    <string name="passkey_provider_title">通行密钥服务设置</string>
-    <string name="passkey_provider_empty">未检测到第三方通行密钥应用，点此查看系统设置</string>
-    <string name="passkey_provider_list">已安装 %1$s，点此前往切换</string>
-    <string name="passkey_provider_many">%1$s 等 %2$d 个服务，点此前往切换</string>
+    <string name="passkey_provider_title">管理通行密钥服务</string>
+    <string name="passkey_provider_empty">前往系统设置管理通行密钥服务</string>
+    <string name="passkey_provider_list">可用：%1$s</string>
+    <string name="passkey_provider_many">%1$s 等 %2$d 个可用服务</string>
     <string name="passkey_unlock_title">解除小米密码接管</string>
-    <string name="passkey_unlock_inactive">启用模块后可一键申请通行密钥解锁作用域</string>
-    <string name="passkey_unlock_gms_missing">需先在系统设置中开启「谷歌基础服务」</string>
+    <string name="passkey_unlock_inactive">启用模块后可一键申请通行密钥作用域</string>
+    <string name="passkey_unlock_gms_missing">需先开启系统「谷歌基础服务」</string>
     <string name="passkey_unlock_missing_scope">缺少 %1$s，点此申请</string>
-    <string name="passkey_unlock_ready">已就绪 · %1$s（重启设备后全面生效）</string>
+    <string name="passkey_unlock_ready">已解锁 · %1$s</string>
+    <string name="passkey_unlock_reload">已授权 · 重启设备后生效</string>
     <string name="passkey_scope_settings">系统设置</string>
     <string name="passkey_scope_security">手机管家</string>
     <string name="passkey_scope_scanner">扫一扫</string>
     <string name="passkey_generic">系统通行密钥服务</string>
 
     <string name="ime_supported">已适配输入法</string>
+    <string name="ime_more_title">其他支持的输入法</string>
+    <string name="ime_more_summary">未安装 %1$d 款：%2$s</string>
     <string name="ime_wechat">微信输入法</string>
     <string name="ime_xiaoai">超级小爱输入法</string>
     <string name="ime_sogou">搜狗输入法</string>
@@ -66,6 +69,9 @@
     <string name="autofill_generic">系统自动填充服务</string>
 
     <string name="section_processes">已注入进程</string>
+    <string name="processes_summary_ok">已注入 %1$d 个进程 · 全部最新</string>
+    <string name="processes_summary_stale">已注入 %1$d 个进程 · %2$d 个需重载</string>
+    <string name="processes_summary_empty">当前未检测到已注入进程</string>
     <string name="process_system">系统框架 (system_server)</string>
     <string name="process_keyboard">%1$s (%2$s)</string>
     <string name="process_summary">PID %1$d · 版本 %2$d · %3$s</string>
@@ -107,7 +113,7 @@
     <string name="section_general">常规</string>
     <string name="pref_hide_icon">隐藏桌面图标</string>
     <string name="pref_hide_icon_summary">隐藏后可在 LSPosed 中打开</string>
-    <string name="section_tools">工具</string>
+    <string name="section_tools">工具与诊断</string>
     <string name="tool_autofill_test">自动填充测试</string>
     <string name="tool_autofill_test_summary">打开模拟登录框，验证键盘建议条</string>
     <string name="test_dialog_title">自动填充测试</string>

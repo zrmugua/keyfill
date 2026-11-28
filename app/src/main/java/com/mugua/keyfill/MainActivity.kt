@@ -28,7 +28,7 @@ internal object AppIconCache {
     fun preload(pm: PackageManager, packageName: String?) {
         if (packageName.isNullOrBlank() || cache.containsKey(packageName)) return
         try {
-            cache[packageName] = pm.getApplicationIcon(packageName).toBitmap(96, 96).asImageBitmap()
+            cache[packageName] = pm.getApplicationIcon(packageName).toBitmap(128, 128).asImageBitmap()
         } catch (_: PackageManager.NameNotFoundException) {
             // Package is not installed.
         }
