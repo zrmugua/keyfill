@@ -472,6 +472,16 @@ internal fun ManagerApp(
                                                     showMessage = showMessage,
                                                 )
                                             }
+                                            if (status.hyperPasskey.supported) {
+                                                item {
+                                                    HyperPasskeySection(
+                                                        passkey = status.hyperPasskey,
+                                                        xposed = xposed,
+                                                        actions = actions,
+                                                        showMessage = showMessage,
+                                                    )
+                                                }
+                                            }
                                             item {
                                                 SupportedKeyboardsSection(
                                                     status = status,
@@ -804,6 +814,133 @@ private fun EnvironmentSection(
 }
 
 @Composable
+private fun HyperPasskeySection(
+    passkey: HyperPasskeyStatus,
+    xposed: XposedStatus,
+    actions: ManagerActions,
+    showMessage: (String) -> Unit,
+) {
+    val openFailedMsg = stringResource(R.string.snackbar_open_failed)
+    val scopeApprovedMsg = stringResource(R.string.snackbar_scope_approved)
+    val scopeFailedPattern = stringResource(R.string.snackbar_scope_failed)
+    val refreshedMsg = stringResource(R.string.snackbar_refreshed)
+    val systemLabel = stringResource(R.string.status_scope_system)
+    val settingsLabel = stringResource(R.string.passkey_scope_settings)
+    val securityLabel = stringResource(R.string.passkey_scope_security)
+    val scannerLabel = stringResource(R.string.passkey_scope_scanner)
+
+    val requiredPackages = remember(passkey.scannerInstalled) {
+        buildList {
+            add("android")
+            add(HyperPasskeyHooks.SETTINGS_PACKAGE)
+            add(HyperPasskeyHooks.SECURITY_CENTER_PACKAGE)
+            if (passkey.scannerInstalled) {
+                add(HyperPasskeyHooks.SCANNER_PACKAGE)
+            }
+        }
+    }
+    val missingPackages = remember(xposed, requiredPackages) {
+        if (!xposed.active) {
+            emptyList()
+        } else {
+            requiredPackages.filter { pkg ->
+                if (pkg == "android") !xposed.hasSystemScope else !xposed.isScoped(pkg)
+            }
+        }
+    }
+    val labelForPkg: (String) -> String = { pkg ->
+        when (pkg) {
+            "android" -> systemLabel
+            HyperPasskeyHooks.SETTINGS_PACKAGE -> settingsLabel
+            HyperPasskeyHooks.SECURITY_CENTER_PACKAGE -> securityLabel
+            HyperPasskeyHooks.SCANNER_PACKAGE -> scannerLabel
+            else -> pkg
+        }
+    }
+    val missingLabels = remember(missingPackages, systemLabel, settingsLabel, securityLabel, scannerLabel) {
+        missingPackages.map(labelForPkg)
+    }
+    val activeScopeLabels = remember(passkey.scannerInstalled, xposed, settingsLabel, securityLabel, scannerLabel) {
+        buildList {
+            if (xposed.isScoped(HyperPasskeyHooks.SETTINGS_PACKAGE)) add(settingsLabel)
+            if (xposed.isScoped(HyperPasskeyHooks.SECURITY_CENTER_PACKAGE)) add(securityLabel)
+            if (passkey.scannerInstalled && xposed.isScoped(HyperPasskeyHooks.SCANNER_PACKAGE)) add(scannerLabel)
+        }
+    }
+
+    val providerSummary = when {
+        passkey.providers.isEmpty() -> stringResource(R.string.passkey_provider_empty)
+        passkey.providers.size <= 3 -> stringResource(
+            R.string.passkey_provider_list,
+            passkey.providers.joinToString("、") { it.label },
+        )
+        else -> stringResource(
+            R.string.passkey_provider_many,
+            passkey.providers.take(2).joinToString("、") { it.label },
+            passkey.providers.size,
+        )
+    }
+
+    val unlockSummary = when {
+        !xposed.active -> stringResource(R.string.passkey_unlock_inactive)
+        !passkey.gmsChooserReady -> stringResource(R.string.passkey_unlock_gms_missing)
+        missingLabels.isNotEmpty() -> stringResource(R.string.passkey_unlock_missing_scope, missingLabels.joinToString("、"))
+        else -> stringResource(R.string.passkey_unlock_ready, activeScopeLabels.joinToString("、"))
+    }
+
+    Column {
+        SmallTitle(text = stringResource(R.string.section_hyper_passkey), insideMargin = SectionTitleMargin)
+        Card(modifier = Modifier.fillMaxWidth(), cornerRadius = 20.dp, insideMargin = CardMargin) {
+            ManagerRow(
+                title = stringResource(R.string.passkey_provider_title),
+                summary = providerSummary,
+                icon = MiuixIcons.Lock,
+                packageName = passkey.providers.firstOrNull()?.packageName,
+                showChevron = true,
+                onClick = {
+                    if (!actions.openCredentialSettings()) {
+                        showMessage(openFailedMsg)
+                    }
+                },
+            )
+            ManagerRow(
+                title = stringResource(R.string.passkey_unlock_title),
+                summary = unlockSummary,
+                icon = MiuixIcons.Tune,
+                showChevron = true,
+                onClick = when {
+                    !xposed.active -> {
+                        {
+                            actions.refresh()
+                            showMessage(refreshedMsg)
+                        }
+                    }
+                    !passkey.gmsChooserReady -> {
+                        {
+                            if (!actions.openCredentialSettings()) showMessage(openFailedMsg)
+                        }
+                    }
+                    missingPackages.isNotEmpty() -> {
+                        {
+                            actions.requestScope(missingPackages) { ok, reason ->
+                                showMessage(
+                                    if (ok) scopeApprovedMsg else String.format(scopeFailedPattern, reason ?: "-"),
+                                )
+                            }
+                        }
+                    }
+                    else -> {
+                        {
+                            if (!actions.openCredentialSettings()) showMessage(openFailedMsg)
+                        }
+                    }
+                },
+            )
+        }
+    }
+}
+
+@Composable
 private fun SupportedKeyboardsSection(
     status: DeviceStatus,
     xposed: XposedStatus,
@@ -891,9 +1028,18 @@ private fun HookedProcessesSection(
                 val matchedKeyboard = status.keyboards.firstOrNull {
                     target.processName == it.app.packageName || target.processName.startsWith("${it.app.packageName}:")
                 }
+                val matchedSystemApp = listOf(
+                    HyperPasskeyHooks.SETTINGS_PACKAGE to stringResource(R.string.passkey_scope_settings),
+                    HyperPasskeyHooks.SECURITY_CENTER_PACKAGE to stringResource(R.string.passkey_scope_security),
+                    HyperPasskeyHooks.SCANNER_PACKAGE to stringResource(R.string.passkey_scope_scanner),
+                ).firstOrNull { (appPkg, _) ->
+                    target.processName == appPkg || target.processName.startsWith("$appPkg:")
+                }
                 val title = when {
                     target.processName == "system" || target.processName == "system_server" || target.processName == "android" ->
                         stringResource(R.string.process_system)
+                    matchedSystemApp != null ->
+                        stringResource(R.string.process_keyboard, matchedSystemApp.second, target.processName)
                     matchedKeyboard != null ->
                         stringResource(R.string.process_keyboard, matchedKeyboard.app.label, target.processName)
                     else -> target.processName
@@ -906,7 +1052,7 @@ private fun HookedProcessesSection(
                         HookedTarget.State.FAILED -> R.string.process_state_failed
                     },
                 )
-                val pkg = matchedKeyboard?.app?.packageName
+                val pkg = matchedKeyboard?.app?.packageName ?: matchedSystemApp?.first
                 ManagerRow(
                     title = title,
                     summary = stringResource(R.string.process_summary, target.pid, target.loadedVersionCode, stateLabel),

@@ -33,6 +33,21 @@
     <string name="status_ime">默认输入法</string>
     <string name="status_not_configured">未设置，点此前往系统设置</string>
 
+    <string name="section_hyper_passkey">HyperOS 通行密钥</string>
+    <string name="passkey_provider_title">通行密钥服务设置</string>
+    <string name="passkey_provider_empty">未检测到第三方通行密钥应用，点此查看系统设置</string>
+    <string name="passkey_provider_list">已安装 %1$s，点此前往切换</string>
+    <string name="passkey_provider_many">%1$s 等 %2$d 个服务，点此前往切换</string>
+    <string name="passkey_unlock_title">解除小米密码接管</string>
+    <string name="passkey_unlock_inactive">启用模块后可一键申请通行密钥解锁作用域</string>
+    <string name="passkey_unlock_gms_missing">需先在系统设置中开启「谷歌基础服务」</string>
+    <string name="passkey_unlock_missing_scope">缺少 %1$s，点此申请</string>
+    <string name="passkey_unlock_ready">已就绪 · %1$s（重启设备后全面生效）</string>
+    <string name="passkey_scope_settings">系统设置</string>
+    <string name="passkey_scope_security">手机管家</string>
+    <string name="passkey_scope_scanner">扫一扫</string>
+    <string name="passkey_generic">系统通行密钥服务</string>
+
     <string name="ime_supported">已适配输入法</string>
     <string name="ime_wechat">微信输入法</string>
     <string name="ime_xiaoai">超级小爱输入法</string>

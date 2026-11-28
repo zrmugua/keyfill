@@ -2,8 +2,18 @@
     <queries>
         <package android:name="com.onepassword.android" />
         <package android:name="com.x8bit.bitwarden" />
+        <package android:name="com.google.android.gms" />
+        <package android:name="com.miui.passwords" />
+        <package android:name="com.miui.contentcatcher" />
+        <package android:name="com.android.settings" />
+        <package android:name="com.miui.securitycenter" />
+        <package android:name="com.xiaomi.scanner" />
+        <package android:name="com.azure.authenticator" />
         <intent>
             <action android:name="android.service.autofill.AutofillService" />
+        </intent>
+        <intent>
+            <action android:name="android.service.credentials.CredentialProviderService" />
         </intent>
         <intent>
             <action android:name="android.view.InputMethod" />

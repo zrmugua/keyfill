@@ -65,10 +65,18 @@ internal data class UiPreferences(
     val launcherIconHidden: Boolean = false,
 )
 
+internal data class HyperPasskeyStatus(
+    val supported: Boolean = false,
+    val providers: List<AppIdentity> = emptyList(),
+    val gmsChooserReady: Boolean = false,
+    val scannerInstalled: Boolean = false,
+)
+
 internal data class DeviceStatus(
     val autofillProvider: AppIdentity?,
     val defaultKeyboard: AppIdentity?,
     val keyboards: List<KeyboardStatus>,
+    val hyperPasskey: HyperPasskeyStatus = HyperPasskeyStatus(),
 ) {
     val hasSupportedKeyboard: Boolean
         get() = keyboards.any { it.app.packageName == defaultKeyboard?.packageName }
@@ -77,6 +85,7 @@ internal data class DeviceStatus(
 internal interface ManagerActions {
     fun refresh(): Boolean
     fun openAutofillSettings(): Boolean
+    fun openCredentialSettings(): Boolean
     fun openInputMethodPicker(): Boolean
     fun openInputMethodSettings(): Boolean
     fun openAppDetails(targetPackage: String): Boolean
@@ -168,6 +177,27 @@ class MainActivity : ComponentActivity(), ManagerActions {
             if (targetPackage != null) {
                 add(Intent(Settings.ACTION_REQUEST_SET_AUTOFILL_SERVICE, Uri.parse("package:$targetPackage")))
             }
+            add(Intent(Settings.ACTION_INPUT_METHOD_SETTINGS))
+            add(Intent(Settings.ACTION_SETTINGS))
+        }
+        return launchFirstAvailable(candidates)
+    }
+
+    override fun openCredentialSettings(): Boolean {
+        val targetPackage = deviceStatus.autofillProvider?.packageName
+            ?: deviceStatus.hyperPasskey.providers.firstOrNull()?.packageName
+            ?: packageManager.queryIntentServices(
+                Intent("android.service.credentials.CredentialProviderService"),
+                PackageManager.ResolveInfoFlags.of(0L),
+            ).firstOrNull()?.serviceInfo?.packageName
+        val candidates = buildList {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE && targetPackage != null) {
+                add(Intent("android.settings.CREDENTIAL_PROVIDER", Uri.parse("package:$targetPackage")))
+            }
+            if (targetPackage != null) {
+                add(Intent(Settings.ACTION_REQUEST_SET_AUTOFILL_SERVICE, Uri.parse("package:$targetPackage")))
+            }
+            add(Intent(Settings.ACTION_SYNC_SETTINGS))
             add(Intent(Settings.ACTION_INPUT_METHOD_SETTINGS))
             add(Intent(Settings.ACTION_SETTINGS))
         }
@@ -292,7 +322,84 @@ class MainActivity : ComponentActivity(), ManagerActions {
         }
         AppIconCache.preload(packageManager, defaultKeyboard?.packageName)
         AppIconCache.preload(packageManager, provider?.packageName)
-        return DeviceStatus(provider, defaultKeyboard, keyboards)
+        val hyperPasskey = readHyperPasskeyStatus(provider?.packageName)
+        AppIconCache.preload(packageManager, hyperPasskey.providers.firstOrNull()?.packageName)
+        if (hyperPasskey.supported) {
+            AppIconCache.preload(packageManager, HyperPasskeyHooks.SETTINGS_PACKAGE)
+            AppIconCache.preload(packageManager, HyperPasskeyHooks.SECURITY_CENTER_PACKAGE)
+            if (hyperPasskey.scannerInstalled) {
+                AppIconCache.preload(packageManager, HyperPasskeyHooks.SCANNER_PACKAGE)
+            }
+        }
+        return DeviceStatus(provider, defaultKeyboard, keyboards, hyperPasskey)
+    }
+
+    private fun readHyperPasskeyStatus(preferredPackage: String?): HyperPasskeyStatus {
+        val isHyperOs = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE &&
+            (sysProp("ro.mi.os.version.name").isNotBlank() || sysProp("ro.miui.ui.version.name").isNotBlank())
+        if (!isHyperOs) {
+            return HyperPasskeyStatus(supported = false)
+        }
+        val providers = queryThirdPartyCredentialProviders(preferredPackage)
+        val gmsChooserReady = isGmsChooserReady()
+        val scannerInstalled = findApp(HyperPasskeyHooks.SCANNER_PACKAGE) != null
+        return HyperPasskeyStatus(
+            supported = true,
+            providers = providers,
+            gmsChooserReady = gmsChooserReady,
+            scannerInstalled = scannerInstalled,
+        )
+    }
+
+    private fun queryThirdPartyCredentialProviders(preferredPackage: String?): List<AppIdentity> {
+        val resolved = packageManager.queryIntentServices(
+            Intent("android.service.credentials.CredentialProviderService"),
+            PackageManager.ResolveInfoFlags.of(0L),
+        )
+        val seen = LinkedHashSet<String>()
+        val items = mutableListOf<AppIdentity>()
+        for (entry in resolved) {
+            val pkg = entry.serviceInfo?.packageName ?: continue
+            if (pkg == HyperPasskeyHooks.MIUI_PASSWORDS_PACKAGE ||
+                pkg == HyperPasskeyHooks.MIUI_CONTENT_CATCHER_PACKAGE ||
+                !seen.add(pkg)
+            ) {
+                continue
+            }
+            val label = when (pkg) {
+                "com.onepassword.android" -> "1Password"
+                "com.x8bit.bitwarden" -> "Bitwarden"
+                "com.google.android.gms" -> "Google"
+                "com.azure.authenticator" -> "Authenticator"
+                else -> appLabel(pkg) ?: getString(R.string.passkey_generic)
+            }
+            items.add(AppIdentity(label, pkg))
+        }
+        return items.sortedWith(
+            compareBy<AppIdentity>(
+                { it.packageName != preferredPackage },
+                { it.packageName == HyperPasskeyHooks.GMS_PACKAGE },
+                { it.label.lowercase() },
+            ),
+        )
+    }
+
+    private fun isGmsChooserReady(): Boolean {
+        val component = ComponentName.unflattenFromString(HyperPasskeyHooks.GMS_CHOOSER_COMPONENT) ?: return false
+        val info = try {
+            packageManager.getActivityInfo(component, PackageManager.ComponentInfoFlags.of(0L))
+        } catch (_: PackageManager.NameNotFoundException) {
+            return false
+        }
+        if (!info.exported) return false
+        return when (packageManager.getComponentEnabledSetting(component)) {
+            PackageManager.COMPONENT_ENABLED_STATE_ENABLED -> true
+            PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+            PackageManager.COMPONENT_ENABLED_STATE_DISABLED_USER,
+            PackageManager.COMPONENT_ENABLED_STATE_DISABLED_UNTIL_USED,
+            -> false
+            else -> info.enabled
+        }
     }
 
     private fun appLabel(name: String): String? = findApp(name)?.let { app ->

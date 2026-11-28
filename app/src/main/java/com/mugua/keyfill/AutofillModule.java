@@ -61,10 +61,14 @@ public final class AutofillModule extends XposedModule {
         } catch (ReflectiveOperationException | RuntimeException | LinkageError failure) {
             log("Inline theme hook unavailable: " + failure.getClass().getSimpleName());
         }
+        HyperPasskeyHooks.installSystemServer(this, param.getClassLoader());
     }
 
     @Override
     public void onPackageReady(PackageReadyParam param) {
+        if (param.isFirstPackage()) {
+            HyperPasskeyHooks.installPackage(this, param.getPackageName(), param.getClassLoader());
+        }
         if (target == null || !target.packageName.equals(param.getPackageName())) {
             return;
         }
