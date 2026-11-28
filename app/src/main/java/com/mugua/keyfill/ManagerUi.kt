@@ -136,7 +136,6 @@ import top.yukonga.miuix.kmp.glass.GlassTextField
 import top.yukonga.miuix.kmp.glass.GlassTopAppBar
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.basic.ArrowRight
-import top.yukonga.miuix.kmp.icon.extended.Background
 import top.yukonga.miuix.kmp.icon.extended.Clear
 import top.yukonga.miuix.kmp.icon.extended.Contacts
 import top.yukonga.miuix.kmp.icon.extended.Copy
@@ -147,10 +146,6 @@ import top.yukonga.miuix.kmp.icon.extended.Lock
 import top.yukonga.miuix.kmp.icon.extended.Refresh
 import top.yukonga.miuix.kmp.icon.extended.Settings
 import top.yukonga.miuix.kmp.icon.extended.Show
-import top.yukonga.miuix.kmp.icon.extended.Tasks
-import top.yukonga.miuix.kmp.icon.extended.Theme
-import top.yukonga.miuix.kmp.icon.extended.Tune
-import top.yukonga.miuix.kmp.icon.extended.Unlock
 import top.yukonga.miuix.kmp.material.GlassEdgeStrokes
 import top.yukonga.miuix.kmp.theme.ColorSchemeMode
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -700,20 +695,6 @@ private fun StatusHeroCard(
     }
 }
 
-private data class IconBadgeStyle(
-    val topColor: Color,
-    val bottomColor: Color,
-    val tint: Color = Color.White,
-)
-
-private val BadgeBlue = IconBadgeStyle(Color(0xFF4C8DFF), Color(0xFF1B5EF2))
-private val BadgeEmerald = IconBadgeStyle(Color(0xFF34D399), Color(0xFF059669))
-private val BadgeIndigo = IconBadgeStyle(Color(0xFF818CF8), Color(0xFF4F46E5))
-private val BadgeSky = IconBadgeStyle(Color(0xFF38BDF8), Color(0xFF0284C7))
-private val BadgeAmber = IconBadgeStyle(Color(0xFFFBBF24), Color(0xFFF97316))
-private val BadgeViolet = IconBadgeStyle(Color(0xFFF472B6), Color(0xFF9333EA))
-private val BadgeSlate = IconBadgeStyle(Color(0xFF94A3B8), Color(0xFF475569))
-
 private fun allMissingScopePackages(status: DeviceStatus, xposed: XposedStatus): List<String> {
     if (!xposed.active) return emptyList()
     val result = LinkedHashSet<String>()
@@ -746,6 +727,8 @@ private fun QuickServicesSection(
     val scopeFailedPattern = stringResource(R.string.snackbar_scope_failed)
     val refreshedMsg = stringResource(R.string.snackbar_refreshed)
     val openFailedMsg = stringResource(R.string.snackbar_open_failed)
+    val shieldIcon = ImageVector.vectorResource(R.drawable.ic_shield_check)
+    val slidersIcon = ImageVector.vectorResource(R.drawable.ic_sliders)
 
     val missingScopes = remember(status, xposed) { missingScopePackages(status, xposed) }
     val missingLabels = remember(missingScopes, status, systemScopeLabel) {
@@ -770,8 +753,7 @@ private fun QuickServicesSection(
             ManagerRow(
                 title = stringResource(R.string.status_autofill),
                 summary = status.autofillProvider?.label ?: unset,
-                icon = MiuixIcons.Medium.Lock,
-                badge = BadgeBlue,
+                icon = shieldIcon,
                 packageName = status.autofillProvider?.packageName,
                 showChevron = true,
                 onClick = {
@@ -784,7 +766,6 @@ private fun QuickServicesSection(
                 title = stringResource(R.string.status_ime),
                 summary = status.defaultKeyboard?.label ?: unset,
                 icon = keyboardIcon,
-                badge = BadgeSky,
                 packageName = status.defaultKeyboard?.packageName,
                 showChevron = true,
                 onClick = {
@@ -797,8 +778,7 @@ private fun QuickServicesSection(
                 ManagerRow(
                     title = stringResource(R.string.status_scope),
                     summary = scopeSummary,
-                    icon = MiuixIcons.Medium.Tune,
-                    badge = BadgeIndigo,
+                    icon = slidersIcon,
                     showChevron = xposed.active,
                     onClick = if (!xposed.active) {
                         {
@@ -835,6 +815,8 @@ private fun HyperPasskeySection(
     val settingsLabel = stringResource(R.string.passkey_scope_settings)
     val securityLabel = stringResource(R.string.passkey_scope_security)
     val scannerLabel = stringResource(R.string.passkey_scope_scanner)
+    val keyIcon = ImageVector.vectorResource(R.drawable.ic_key)
+    val shieldIcon = ImageVector.vectorResource(R.drawable.ic_shield_check)
 
     val requiredPackages = remember(passkey.scannerInstalled) {
         buildList {
@@ -902,8 +884,7 @@ private fun HyperPasskeySection(
             ManagerRow(
                 title = stringResource(R.string.passkey_unlock_title),
                 summary = unlockSummary,
-                icon = MiuixIcons.Medium.Unlock,
-                badge = BadgeEmerald,
+                icon = keyIcon,
                 showChevron = !xposed.active || !passkey.gmsChooserReady || missingPackages.isNotEmpty(),
                 onClick = when {
                     !xposed.active -> {
@@ -936,8 +917,7 @@ private fun HyperPasskeySection(
             ManagerRow(
                 title = stringResource(R.string.passkey_provider_title),
                 summary = providerSummary,
-                icon = MiuixIcons.Medium.Lock,
-                badge = BadgeBlue,
+                icon = shieldIcon,
                 showChevron = true,
                 onClick = {
                     if (!actions.openCredentialSettings()) {
@@ -991,7 +971,6 @@ private fun SupportedKeyboardsSection(
                     title = stringResource(R.string.ime_more_title),
                     summary = stringResource(R.string.ime_more_summary, collapsibleList.size, previewNames),
                     icon = keyboardIcon,
-                    badge = null,
                     expanded = showUninstalled,
                     onToggle = { showUninstalled = !showUninstalled },
                 )
@@ -1058,7 +1037,6 @@ private fun KeyboardItemRow(
         title = keyboard.app.label,
         summary = summary,
         icon = keyboardIcon,
-        badge = null,
         packageName = if (keyboard.installed) pkg else null,
         showChevron = keyboard.installed,
         onClick = when {
@@ -1091,6 +1069,7 @@ private fun HookedProcessRow(
     status: DeviceStatus,
     target: HookedProcessInfo,
     keyboardIcon: ImageVector,
+    cpuIcon: ImageVector,
     actions: ManagerActions,
     openFailedMsg: String,
     showMessage: (String) -> Unit,
@@ -1126,8 +1105,7 @@ private fun HookedProcessRow(
     ManagerRow(
         title = title,
         summary = stringResource(R.string.process_summary, target.pid, target.loadedVersionCode, stateLabel),
-        icon = if (pkg != null) keyboardIcon else MiuixIcons.Medium.Tasks,
-        badge = if (pkg == null) BadgeEmerald else null,
+        icon = if (pkg != null) keyboardIcon else cpuIcon,
         packageName = pkg,
         showChevron = pkg != null,
         onClick = if (pkg != null) {
@@ -1237,6 +1215,12 @@ private fun SettingsSection(
         else -> stringResource(R.string.processes_summary_ok, targets.size)
     }
 
+    val sunIcon = ImageVector.vectorResource(R.drawable.ic_sun)
+    val paletteIcon = ImageVector.vectorResource(R.drawable.ic_palette)
+    val slidersIcon = ImageVector.vectorResource(R.drawable.ic_sliders)
+    val eyeOffIcon = ImageVector.vectorResource(R.drawable.ic_eye_off)
+    val cpuIcon = ImageVector.vectorResource(R.drawable.ic_cpu)
+
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Column {
             SmallTitle(text = stringResource(R.string.section_appearance), insideMargin = SectionTitleMargin)
@@ -1248,13 +1232,12 @@ private fun SettingsSection(
                     onSelectedIndexChange = { actions.updateThemeMode(it) },
                     backdrop = backdrop,
                     insideMargin = RowMargin,
-                    startAction = { SquircleIconBadge(MiuixIcons.Medium.Theme, BadgeAmber) },
+                    startAction = { PackageIcon(null, sunIcon) },
                 )
                 SwitchRow(
                     title = stringResource(R.string.pref_monet),
                     summary = stringResource(R.string.pref_monet_summary),
-                    icon = MiuixIcons.Medium.Background,
-                    badge = BadgeViolet,
+                    icon = paletteIcon,
                     checked = preferences.monetEnabled,
                     onCheckedChange = { actions.updateMonet(it) },
                 )
@@ -1279,16 +1262,19 @@ private fun SettingsSection(
                         startAction = {
                             Box(
                                 modifier = Modifier
-                                    .size(34.dp)
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(swatchColor)
-                                    .border(
-                                        0.75.dp,
-                                        colors.onSurface.copy(alpha = 0.14f),
-                                        RoundedCornerShape(10.dp),
-                                    )
+                                    .size(28.dp)
+                                    .clip(CircleShape)
                                     .clickable(enabled = isCustomColor) { showColorDialog = true },
-                            )
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(21.dp)
+                                        .clip(CircleShape)
+                                        .background(swatchColor)
+                                        .border(1.dp, colors.onSurface.copy(alpha = 0.16f), CircleShape),
+                                )
+                            }
                         },
                     )
                 }
@@ -1301,8 +1287,7 @@ private fun SettingsSection(
                 ManagerRow(
                     title = stringResource(R.string.status_scope),
                     summary = scopeSummary,
-                    icon = MiuixIcons.Medium.Tune,
-                    badge = BadgeIndigo,
+                    icon = slidersIcon,
                     showChevron = xposed.active && missingAllScopes.isNotEmpty(),
                     onClick = if (!xposed.active) {
                         {
@@ -1326,8 +1311,7 @@ private fun SettingsSection(
                 SwitchRow(
                     title = stringResource(R.string.pref_hide_icon),
                     summary = stringResource(R.string.pref_hide_icon_summary),
-                    icon = MiuixIcons.Medium.Hide,
-                    badge = BadgeSlate,
+                    icon = eyeOffIcon,
                     checked = preferences.launcherIconHidden,
                     onCheckedChange = { hidden ->
                         actions.updateLauncherIconHidden(hidden)
@@ -1344,7 +1328,6 @@ private fun SettingsSection(
                     title = stringResource(R.string.tool_autofill_test),
                     summary = stringResource(R.string.tool_autofill_test_summary),
                     icon = keyboardIcon,
-                    badge = BadgeSky,
                     showChevron = true,
                     onClick = onOpenTest,
                 )
@@ -1352,8 +1335,7 @@ private fun SettingsSection(
                     ExpandableToggleRow(
                         title = stringResource(R.string.section_processes),
                         summary = processesSummary,
-                        icon = MiuixIcons.Medium.Tasks,
-                        badge = BadgeEmerald,
+                        icon = cpuIcon,
                         expanded = showProcesses,
                         onToggle = { showProcesses = !showProcesses },
                     )
@@ -1368,6 +1350,7 @@ private fun SettingsSection(
                                     status = status,
                                     target = target,
                                     keyboardIcon = keyboardIcon,
+                                    cpuIcon = cpuIcon,
                                     actions = actions,
                                     openFailedMsg = openFailedMsg,
                                     showMessage = showMessage,
@@ -1379,8 +1362,7 @@ private fun SettingsSection(
                     ManagerRow(
                         title = stringResource(R.string.section_processes),
                         summary = processesSummary,
-                        icon = MiuixIcons.Medium.Tasks,
-                        badge = BadgeEmerald,
+                        icon = cpuIcon,
                         onClick = {
                             actions.refresh()
                             showMessage(refreshedMsg)
@@ -2229,7 +2211,6 @@ private fun SwitchRow(
     title: String,
     summary: String,
     icon: ImageVector,
-    badge: IconBadgeStyle? = null,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
 ) {
@@ -2237,7 +2218,7 @@ private fun SwitchRow(
         title = title,
         summary = summary,
         insideMargin = RowMargin,
-        startAction = { PackageIcon(null, icon, badge) },
+        startAction = { PackageIcon(null, icon) },
         endActions = {
             Switch(
                 checked = checked,
@@ -2254,7 +2235,6 @@ private fun ExpandableToggleRow(
     title: String,
     summary: String,
     icon: ImageVector,
-    badge: IconBadgeStyle?,
     expanded: Boolean,
     onToggle: () -> Unit,
 ) {
@@ -2266,7 +2246,7 @@ private fun ExpandableToggleRow(
         title = title,
         summary = summary,
         insideMargin = RowMargin,
-        startAction = { PackageIcon(null, icon, badge) },
+        startAction = { PackageIcon(null, icon) },
         endActions = {
             Icon(
                 imageVector = MiuixIcons.Basic.ArrowRight,
@@ -2287,7 +2267,6 @@ private fun ManagerRow(
     title: String,
     summary: String,
     icon: ImageVector,
-    badge: IconBadgeStyle? = null,
     packageName: String? = null,
     showChevron: Boolean = false,
     onClick: (() -> Unit)? = null,
@@ -2296,7 +2275,7 @@ private fun ManagerRow(
         title = title,
         summary = summary,
         insideMargin = RowMargin,
-        startAction = { PackageIcon(packageName, icon, badge) },
+        startAction = { PackageIcon(packageName, icon) },
         endActions = {
             if (showChevron) {
                 Icon(
@@ -2314,54 +2293,21 @@ private fun ManagerRow(
 }
 
 @Composable
-private fun SquircleIconBadge(
-    icon: ImageVector,
-    badge: IconBadgeStyle?,
-) {
-    val colors = MiuixTheme.colorScheme
-    val shape = RoundedCornerShape(10.dp)
-    val bgModifier = if (badge != null) {
-        Modifier.background(
-            Brush.linearGradient(
-                colors = listOf(badge.topColor, badge.bottomColor),
-            ),
-        )
-    } else {
-        Modifier.background(colors.onSurface.copy(alpha = 0.07f))
-    }
-    Box(
-        modifier = Modifier
-            .size(34.dp)
-            .clip(shape)
-            .then(bgModifier),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            modifier = Modifier.size(19.dp),
-            tint = badge?.tint ?: colors.onSurfaceVariantSummary,
-        )
-    }
-}
-
-@Composable
 private fun PackageIcon(
     packageName: String?,
     fallback: ImageVector,
-    badge: IconBadgeStyle? = null,
 ) {
     val context = LocalContext.current
     val bitmap = remember(context, packageName) {
         AppIconCache.get(context.packageManager, packageName)
     }
     if (bitmap != null) {
-        val shape = RoundedCornerShape(10.dp)
+        val shape = RoundedCornerShape(8.dp)
         Image(
             bitmap = bitmap,
             contentDescription = null,
             modifier = Modifier
-                .size(34.dp)
+                .size(28.dp)
                 .clip(shape)
                 .border(
                     0.5.dp,
@@ -2370,6 +2316,16 @@ private fun PackageIcon(
                 ),
         )
     } else {
-        SquircleIconBadge(icon = fallback, badge = badge)
+        Box(
+            modifier = Modifier.size(28.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = fallback,
+                contentDescription = null,
+                modifier = Modifier.size(22.dp),
+                tint = MiuixTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+            )
+        }
     }
 }
